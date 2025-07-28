@@ -10,12 +10,12 @@ It has 2 main entities - Buckets & Transactions. Buckets have budgets. Use any j
 It has sub menu items as Buckets, Transactions and Calculator. 
 
 ### Buckets
-![BUCKETS](./imgs/buckets.png)
+![BUCKETS](./imgs/buckets2.png)
 
 It has buttons to create new bucket, edit a bucket or refill it.
 
 ### Transactions
-![TRANSACTIONS](./imgs/Transactions.png)
+![TRANSACTIONS](./imgs/transactions2.png)
 
 It has buttons for multiple options. You can do following -
 - Create new transaction
