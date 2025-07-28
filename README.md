@@ -15,7 +15,7 @@ It has sub menu items as Buckets, Transactions and Calculator.
 It has buttons to create new bucket, edit a bucket or refill it.
 
 ### Transactions
-![TRANSACTIONS](./imgs/transactions.png)
+![TRANSACTIONS](./imgs/Transactions.png)
 
 It has buttons for multiple options. You can do following -
 - Create new transaction
