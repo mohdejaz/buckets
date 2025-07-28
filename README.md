@@ -29,3 +29,6 @@ It has buttons for multiple options. You can do following -
 
 ## Notes
 1. This project uses JDatePicker available at https://github.com/JDatePicker/JDatePicker
+
+## To Run App
+run.bat
