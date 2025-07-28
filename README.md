@@ -25,6 +25,7 @@ It has buttons for multiple options. You can do following -
 - UnPost (reverse of above)
 - Refresh screen
 - Export selected transactions to CSV file
+- Filter transactions using sql where clause; use column headers as column names. For example amount > 100
 
 ## Notes
 1. This project uses JDatePicker available at https://github.com/JDatePicker/JDatePicker
