@@ -2,6 +2,7 @@ package home.ejaz.ledger.dao;
 
 import home.ejaz.ledger.Config;
 import home.ejaz.ledger.models.Bucket;
+import home.ejaz.ledger.util.ConnectionUtil;
 import org.apache.log4j.Logger;
 
 import java.sql.*;
@@ -17,14 +18,7 @@ public class DAOBucket {
   }
 
   private void init() {
-    try {
-      Class.forName("org.h2.Driver");
-      logger.info("url = " + Config.getDBUrl());
-      conn = DriverManager.getConnection(Config.getDBUrl(), Config.getDBUser(), Config.getDBPass());
-    } catch (Exception e) {
-      e.printStackTrace();
-      System.exit(1);
-    }
+    conn = ConnectionUtil.getConnection();
   }
 
   private DAOBucket() {
@@ -60,18 +54,31 @@ public class DAOBucket {
   public void save(Bucket bucket) throws SQLException {
     if (bucket.id == null) {
       // new
-      try (PreparedStatement ps = conn.prepareStatement("insert into Buckets(name, budget) values (?,?)")) {
+      try (PreparedStatement ps = conn.prepareStatement(
+          "insert into Buckets(name, budget) values (?,?)", Statement.RETURN_GENERATED_KEYS)) {
         ps.setString(1, bucket.name);
         ps.setBigDecimal(2, bucket.budget);
         ps.executeUpdate();
+        try (ResultSet rs = ps.getGeneratedKeys()) {
+          if (rs.next()) {
+            bucket.id = rs.getInt(1);
+          }
+        }
+      } catch (SQLException e) {
+        logger.error("Error inserting bucket", e);
+        throw e;
       }
     } else {
       // update
-      try (PreparedStatement ps = conn.prepareStatement("update Buckets set name = ?, budget = ? where id = ?")) {
+      try (PreparedStatement ps = conn.prepareStatement(
+          "update Buckets set name = ?, budget = ? where id = ?")) {
         ps.setString(1, bucket.name);
         ps.setBigDecimal(2, bucket.budget);
         ps.setInt(3, bucket.id);
         ps.executeUpdate();
+      } catch (SQLException e) {
+        logger.error("Error updating bucket with id " + bucket.id, e);
+        throw e;
       }
     }
   }

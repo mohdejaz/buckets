@@ -1,8 +1,9 @@
 package home.ejaz.ledger;
 
-import home.ejaz.ledger.forms.bucket.FormBuckets;
-import home.ejaz.ledger.forms.calc.FormCalc;
-import home.ejaz.ledger.forms.transaction.FormTransactions;
+import home.ejaz.ledger.forms.buckets.FormBuckets;
+import home.ejaz.ledger.forms.calcs.FormCalc;
+import home.ejaz.ledger.forms.items.FormItems;
+import home.ejaz.ledger.forms.transactions.FormTransactions;
 import org.apache.log4j.Logger;
 
 import javax.swing.*;
@@ -16,6 +17,7 @@ public class FormMenu extends JFrame implements LedgerListener {
   private JMenuItem miBuckets = new JMenuItem("Buckets");
   private JMenuItem miTransactions = new JMenuItem("Transactions");
   private JMenuItem miCalc = new JMenuItem("Calculator");
+  private JMenuItem miItems = new JMenuItem("Items");
   private JMenuItem miExit = new JMenuItem("Exit");
 
 //  private JButton jbBuckets = new JButton("Buckets");
@@ -26,6 +28,7 @@ public class FormMenu extends JFrame implements LedgerListener {
   private int gap = Config.getGap();
   private FormBuckets formBuckets;
   private FormTransactions formTransactions;
+  private FormItems formItems;
   private FormCalc formCalc;
   private boolean init = false;
 
@@ -49,6 +52,12 @@ public class FormMenu extends JFrame implements LedgerListener {
         formCalc.setVisible(true);
       });
 
+      formItems = new FormItems(this);
+      miItems.addActionListener(e -> {
+        formItems.init();
+        formItems.setVisible(true);
+      });
+
       miExit.addActionListener(al -> System.exit(0));
       init = true;
     }
@@ -64,6 +73,8 @@ public class FormMenu extends JFrame implements LedgerListener {
     miBuckets.setMnemonic('B');
     mMenu.add(miTransactions);
     miTransactions.setMnemonic('T');
+    mMenu.add(miItems);
+    miItems.setMnemonic('I');
     mMenu.add(miCalc);
     miCalc.setMnemonic('C');
     mMenu.addSeparator();

@@ -1,4 +1,4 @@
-package home.ejaz.ledger.forms.transaction;
+package home.ejaz.ledger.forms.transactions;
 
 import com.opencsv.CSVWriter;
 import home.ejaz.ledger.Config;

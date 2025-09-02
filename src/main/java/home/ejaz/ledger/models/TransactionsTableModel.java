@@ -2,7 +2,6 @@ package home.ejaz.ledger.models;
 
 import org.apache.log4j.Logger;
 
-import javax.swing.event.TableModelEvent;
 import javax.swing.table.AbstractTableModel;
 import java.math.BigDecimal;
 import java.util.ArrayList;

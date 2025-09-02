@@ -1,4 +1,4 @@
-package home.ejaz.ledger.forms.bucket;
+package home.ejaz.ledger.forms.buckets;
 
 import home.ejaz.ledger.Config;
 import home.ejaz.ledger.dao.DAOBucket;

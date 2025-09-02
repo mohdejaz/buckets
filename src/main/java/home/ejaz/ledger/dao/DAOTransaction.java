@@ -1,8 +1,7 @@
 package home.ejaz.ledger.dao;
 
-import home.ejaz.ledger.Config;
-import home.ejaz.ledger.models.Bucket;
 import home.ejaz.ledger.models.Transaction;
+import home.ejaz.ledger.util.ConnectionUtil;
 import org.apache.commons.lang3.StringUtils;
 
 import java.sql.*;
@@ -17,13 +16,7 @@ public class DAOTransaction {
   }
 
   private void init() {
-    try {
-      Class.forName("org.h2.Driver");
-      conn = DriverManager.getConnection(Config.getDBUrl(), Config.getDBUser(), Config.getDBPass());
-    } catch (Exception e) {
-      e.printStackTrace();
-      System.exit(1);
-    }
+    conn = ConnectionUtil.getConnection();
   }
 
   private DAOTransaction() {

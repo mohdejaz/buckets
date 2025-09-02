@@ -1,16 +1,12 @@
-package home.ejaz.ledger.forms.calc;
+package home.ejaz.ledger.forms.calcs;
 
-import com.ezylang.evalex.EvaluationException;
 import com.ezylang.evalex.Expression;
 import com.ezylang.evalex.data.EvaluationValue;
-import com.ezylang.evalex.parser.ParseException;
 import home.ejaz.ledger.Config;
 import home.ejaz.ledger.FormMenu;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.KeyAdapter;
-import java.awt.event.KeyEvent;
 
 public class FormCalc extends JDialog {
   private FormMenu parent;
