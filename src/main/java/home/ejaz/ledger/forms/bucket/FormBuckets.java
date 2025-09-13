@@ -18,6 +18,7 @@ import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Date;
 
 public class FormBuckets extends JDialog {
   private static final Logger logger = Logger.getLogger(FormBuckets.class.getName());
@@ -25,6 +26,8 @@ public class FormBuckets extends JDialog {
   private JButton jbNew = new JButton("New");
   private JButton jbEdit = new JButton("Edit");
   private JButton jbRefill = new JButton("Refill");
+  private JButton jbReset = new JButton("Reset");
+
   private BucketsTableModel bucketsTableModel = new BucketsTableModel();
   private JTable table = new JTable(bucketsTableModel);
   private JLabel lbStatus = new JLabel("Status ...");
@@ -35,6 +38,7 @@ public class FormBuckets extends JDialog {
   private boolean init = false;
   private int lastSelectBk = -1;
   private FormMenu parent;
+  private Date date;
 
   private void refresh() {
     try {
@@ -75,6 +79,28 @@ public class FormBuckets extends JDialog {
       formBucket.setVisible(true);
       refresh();
       parent.bkUpdate(-1);
+    }
+  }
+
+  public void doBuckReset() throws SQLException {
+    refresh();
+
+    DAOTransaction daoTransaction = DAOTransaction.getInstance();
+    LocalDate dt = LocalDate.now();
+    for (int i = 0; i < bucketsTableModel.getRowCount(); i++) {
+      Bucket bucket = bucketsTableModel.getBucket(i);
+      if (bucket.balance.doubleValue() > 0) {
+        logger.info("Resetting " + bucket.name + " --");
+        Transaction tx = new Transaction();
+        tx.bucket = bucket.name;
+        tx.amount = bucket.balance.multiply(BigDecimal.valueOf(-1.0));
+        tx.txDate = java.sql.Date.valueOf(dt);
+        tx.note = "Reset";
+        daoTransaction.save(tx);
+        logger.info("TX Saved --");
+        refresh();
+        parent.bkUpdate(bucket.id);
+      }
     }
   }
 
@@ -143,6 +169,14 @@ public class FormBuckets extends JDialog {
           throw new RuntimeException(e);
         }
       });
+      this.jbReset.addActionListener(al -> {
+        try {
+          doBuckReset();
+        } catch (SQLException e) {
+          e.printStackTrace();
+          throw new RuntimeException(e);
+        }
+      });
 
       init = true;
     }
@@ -163,6 +197,7 @@ public class FormBuckets extends JDialog {
     btnPanel.add(jbNew);
     btnPanel.add(jbEdit);
     btnPanel.add(jbRefill);
+    btnPanel.add(jbReset);
     main.add(btnPanel, BorderLayout.NORTH);
 
     table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);

@@ -22,233 +22,238 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 
 public class FormTransactions extends JDialog {
-    private static final Logger logger = Logger.getLogger(FormTransactions.class.getName());
+  private static final Logger logger = Logger.getLogger(FormTransactions.class.getName());
 
-    private JButton jbNew = new JButton("New");
-    private JButton jbEdit = new JButton("Edit");
-    private JButton jbDel = new JButton("Del");
-    private JButton jbPost = new JButton("Post");
-    private JButton jbUnPost = new JButton("UnPost");
-    private JButton jbRefresh = new JButton("Refresh");
-    private JButton jbExport = new JButton("Export");
-    private JTextField jtFilter = new JTextField("");
-    private JLabel lbStatus = new JLabel("Status ...");
+  private JButton jbNew = new JButton("New");
+  private JButton jbEdit = new JButton("Edit");
+  private JButton jbDel = new JButton("Del");
+  private JButton jbPost = new JButton("Post");
+  private JButton jbUnPost = new JButton("UnPost");
+  private JButton jbRefresh = new JButton("Refresh");
+  private JButton jbExport = new JButton("Export");
+  private JTextField jtFilter = new JTextField("");
+  private JLabel lbStatus = new JLabel("Status ...");
 
-    private int gap = Config.getGap();
-    private java.util.List<Transaction> list = new ArrayList<>();
-    private TransactionsTableModel txTableModel = new TransactionsTableModel();
-    private JTable table = new JTable(txTableModel);
-    private FormTransaction formTransaction;
-    private boolean init = false;
-    private long lastSelectTx = -1;
-    private FormMenu parent;
+  private int gap = Config.getGap();
+  private java.util.List<Transaction> list = new ArrayList<>();
+  private TransactionsTableModel txTableModel = new TransactionsTableModel();
+  private JTable table = new JTable(txTableModel);
+  private FormTransaction formTransaction;
+  private boolean init = false;
+  private long lastSelectTx = -1;
+  private FormMenu parent;
 
-    private BigDecimal getBalance() {
-        BigDecimal balance = BigDecimal.ZERO;
-        for (int i = 0; i < txTableModel.getRowCount(); i++) {
-            Transaction tx = txTableModel.getTransaction(i);
-            balance = balance.add(tx.amount);
+  private BigDecimal getBalance() {
+    BigDecimal balance = BigDecimal.ZERO;
+    for (int i = 0; i < txTableModel.getRowCount(); i++) {
+      Transaction tx = txTableModel.getTransaction(i);
+      balance = balance.add(tx.amount);
+    }
+    return balance;
+  }
+
+  private void refresh() {
+    try {
+      this.list.clear();
+      this.list.addAll(DAOTransaction.getInstance().getTransactions(jtFilter.getText()));
+      this.txTableModel.setTransactions(list);
+      for (int row = 0; row < this.list.size(); row++) {
+        Transaction tx = this.txTableModel.getTransaction(row);
+        if (tx.id == lastSelectTx) {
+          this.table.addRowSelectionInterval(row, row);
+          break;
         }
-        return balance;
+      }
+      lbStatus.setText(" Balance: " + getBalance());
+    } catch (Exception e) {
+      e.printStackTrace(System.err);
+      System.exit(1);
+    }
+  }
+
+  private void doTxDelete() {
+    java.util.List<Transaction> delTxList = new ArrayList<>();
+    for (int row : this.table.getSelectedRows()) {
+      if (row != -1) {
+        delTxList.add(this.txTableModel.getTransaction(row));
+      }
+    }
+    for (Transaction tx : delTxList) {
+      try {
+        DAOTransaction.getInstance().delete(tx.id);
+        parent.txDelete(tx.id);
+      } catch (SQLException e) {
+        e.printStackTrace(System.err);
+      }
+    }
+    refresh();
+  }
+
+  private void doTxAdd() {
+    formTransaction.clear(true);
+    formTransaction.init();
+    formTransaction.setVisible(true);
+    refresh();
+    parent.txAdded(-1);
+  }
+
+  private void doTxEdit() {
+    formTransaction.clear(true);
+    formTransaction.init();
+    for (int row : table.getSelectedRows()) {
+      Transaction tx = this.txTableModel.getTransaction(row);
+      this.lastSelectTx = tx.id;
+      formTransaction.setTransaction(tx);
+      formTransaction.setVisible(true);
+      parent.txUpdate(-1);
+    }
+    refresh();
+  }
+
+  private void doTxPost() throws SQLException {
+    DAOTransaction daoTransaction = DAOTransaction.getInstance();
+    for (int row : table.getSelectedRows()) {
+      Transaction tx = this.txTableModel.getTransaction(row);
+      this.lastSelectTx = tx.id;
+      daoTransaction.post(tx.id);
+    }
+    refresh();
+  }
+
+  private void doUnTxPost() throws SQLException {
+    DAOTransaction daoTransaction = DAOTransaction.getInstance();
+    for (int row : table.getSelectedRows()) {
+      Transaction tx = this.txTableModel.getTransaction(row);
+      this.lastSelectTx = tx.id;
+      daoTransaction.unpost(tx.id);
+    }
+    refresh();
+  }
+
+  private void doExport() throws IOException {
+    File file = File.createTempFile("ledger-", ".csv");
+
+    try (FileWriter fw = new FileWriter(file); CSVWriter cw = new CSVWriter(fw)) {
+      cw.writeNext(txTableModel.colNames);
+      for (Transaction tx : this.list) {
+        // new String[]{"Posted", "Id", "TxDate", "Bucket", "Amount", "Note"};
+        cw.writeNext(new String[]{
+          "" + tx.posted,
+          "" + tx.id,
+          "" + tx.txDate,
+          tx.bucket,
+          "" + tx.amount,
+          tx.note
+        });
+      }
     }
 
-    private void refresh() {
+    StringSelection stringSelection = new StringSelection(file.getAbsolutePath());
+    Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
+    clipboard.setContents(stringSelection, null);
+    this.lbStatus.setText("Data saved in " + file.getAbsolutePath());
+  }
+
+  public void init() {
+    refresh();
+
+    if (!init) {
+      table.setShowGrid(true);
+      table.setShowHorizontalLines(true);
+      table.setShowVerticalLines(true);
+      table.setGridColor(Color.lightGray);
+      table.getTableHeader().setReorderingAllowed(false);
+      table.setIntercellSpacing(new Dimension(5, 5));
+
+      this.table.getSelectionModel().addListSelectionListener(l -> {
+        int row = table.getSelectedRow();
+        if (row != -1) {
+          Transaction tx = this.txTableModel.getTransaction(row);
+          this.lastSelectTx = tx.id;
+        }
+      });
+
+      this.table.addMouseListener(new MouseAdapter() {
+        @Override
+        public void mouseClicked(MouseEvent e) {
+          if (e.getClickCount() >= 2) {
+            doTxEdit();
+          }
+        }
+      });
+
+      formTransaction = new FormTransaction(this);
+
+      jbRefresh.addActionListener(al -> refresh());
+      jbNew.addActionListener(al -> doTxAdd());
+      jbEdit.addActionListener(al -> doTxEdit());
+      jbDel.addActionListener(al -> doTxDelete());
+      jbPost.addActionListener(al -> {
         try {
-            this.list.clear();
-            this.list.addAll(DAOTransaction.getInstance().getTransactions(jtFilter.getText()));
-            this.txTableModel.setTransactions(list);
-            for (int row = 0; row < this.list.size(); row++) {
-                Transaction tx = this.txTableModel.getTransaction(row);
-                if (tx.id == lastSelectTx) {
-                    this.table.addRowSelectionInterval(row, row);
-                    break;
-                }
-            }
-            lbStatus.setText(" Balance: " + getBalance());
-        } catch (Exception e) {
-            e.printStackTrace(System.err);
-            System.exit(1);
+          doTxPost();
+        } catch (SQLException e) {
+          throw new RuntimeException(e);
         }
-    }
-
-    private void doTxDelete() {
-        if (this.table.getSelectedRow() != -1) {
-            Transaction tx = this.txTableModel.getTransaction(this.table.getSelectedRow());
-            try {
-                DAOTransaction.getInstance().delete(tx.id);
-                refresh();
-                parent.txDelete(tx.id);
-            } catch (SQLException e) {
-                e.printStackTrace(System.err);
-            }
+      });
+      jbUnPost.addActionListener(al -> {
+        try {
+          doUnTxPost();
+        } catch (SQLException e) {
+          throw new RuntimeException(e);
         }
-    }
-
-    private void doTxAdd() {
-        formTransaction.clear(true);
-        formTransaction.init();
-        formTransaction.setVisible(true);
+      });
+      jbExport.addActionListener(e -> {
+        try {
+          doExport();
+        } catch (IOException ex) {
+          throw new RuntimeException(ex);
+        }
+      });
+      jtFilter.addActionListener(e -> {
         refresh();
-        parent.txAdded(-1);
+      });
+
+      init = true;
     }
+  }
 
-    private void doTxEdit() {
-        formTransaction.clear(true);
-        formTransaction.init();
-        for (int row : table.getSelectedRows()) {
-            Transaction tx = this.txTableModel.getTransaction(row);
-            this.lastSelectTx = tx.id;
-            formTransaction.setTransaction(tx);
-            formTransaction.setVisible(true);
-            parent.txUpdate(-1);
-        }
-        refresh();
-    }
+  public FormTransactions(FormMenu parent) {
+    super(parent);
 
-    private void doTxPost() throws SQLException {
-        DAOTransaction daoTransaction = DAOTransaction.getInstance();
-        for (int row : table.getSelectedRows()) {
-            Transaction tx = this.txTableModel.getTransaction(row);
-            this.lastSelectTx = tx.id;
-            daoTransaction.post(tx.id);
-        }
-        refresh();
-    }
+    this.parent = parent;
 
-    private void doUnTxPost() throws SQLException {
-        DAOTransaction daoTransaction = DAOTransaction.getInstance();
-        for (int row : table.getSelectedRows()) {
-            Transaction tx = this.txTableModel.getTransaction(row);
-            this.lastSelectTx = tx.id;
-            daoTransaction.unpost(tx.id);
-        }
-        refresh();
-    }
+    init();
 
-    private void doExport() throws IOException {
-        File file = File.createTempFile("ledger-", ".csv");
+    JPanel main = new JPanel();
+    main.setLayout(new BorderLayout());
+    main.setBorder(BorderFactory.createEmptyBorder(gap, gap, gap, gap));
 
-        try (FileWriter fw = new FileWriter(file); CSVWriter cw = new CSVWriter(fw)) {
-            cw.writeNext(txTableModel.colNames);
-            for (Transaction tx : this.list) {
-                // new String[]{"Posted", "Id", "TxDate", "Bucket", "Amount", "Note"};
-                cw.writeNext(new String[]{
-                        "" + tx.posted,
-                        "" + tx.id,
-                        "" + tx.txDate,
-                        tx.bucket,
-                        "" + tx.amount,
-                        tx.note
-                });
-            }
-        }
+    JPanel jp1 = new JPanel(new GridLayout(2, 1));
+    JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, gap, gap));
+    btnPanel.add(jbNew);
+    btnPanel.add(jbEdit);
+    btnPanel.add(jbDel);
+    btnPanel.add(jbPost);
+    btnPanel.add(jbUnPost);
+    btnPanel.add(jbRefresh);
+    btnPanel.add(jbExport);
+    jp1.add(btnPanel);
+    jp1.add(jtFilter);
+    main.add(jp1, BorderLayout.NORTH);
 
-        StringSelection stringSelection = new StringSelection(file.getAbsolutePath());
-        Clipboard clipboard = Toolkit.getDefaultToolkit().getSystemClipboard();
-        clipboard.setContents(stringSelection, null);
-        this.lbStatus.setText("Data saved in " + file.getAbsolutePath());
-    }
+    table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+    table.setRowHeight(Config.getDotsPerSquare());
+    JScrollPane jsp = new JScrollPane(table);
+    main.add(jsp, BorderLayout.CENTER);
 
-    public void init() {
-        refresh();
+    main.add(lbStatus, BorderLayout.SOUTH);
 
-        if (!init) {
-            table.setShowGrid(true);
-            table.setShowHorizontalLines(true);
-            table.setShowVerticalLines(true);
-            table.setGridColor(Color.lightGray);
-            table.getTableHeader().setReorderingAllowed(false);
-            table.setIntercellSpacing(new Dimension(5, 5));
+    getContentPane().setLayout(new BorderLayout());
+    getContentPane().add(main, BorderLayout.CENTER);
 
-            this.table.getSelectionModel().addListSelectionListener(l -> {
-                int row = table.getSelectedRow();
-                if (row != -1) {
-                    Transaction tx = this.txTableModel.getTransaction(row);
-                    this.lastSelectTx = tx.id;
-                }
-            });
-
-            this.table.addMouseListener(new MouseAdapter() {
-                @Override
-                public void mouseClicked(MouseEvent e) {
-                    if (e.getClickCount() >= 2) {
-                        doTxEdit();
-                    }
-                }
-            });
-
-            formTransaction = new FormTransaction(this);
-
-            jbRefresh.addActionListener(al -> refresh());
-            jbNew.addActionListener(al -> doTxAdd());
-            jbEdit.addActionListener(al -> doTxEdit());
-            jbDel.addActionListener(al -> doTxDelete());
-            jbPost.addActionListener(al -> {
-                try {
-                    doTxPost();
-                } catch (SQLException e) {
-                    throw new RuntimeException(e);
-                }
-            });
-            jbUnPost.addActionListener(al -> {
-                try {
-                    doUnTxPost();
-                } catch (SQLException e) {
-                    throw new RuntimeException(e);
-                }
-            });
-            jbExport.addActionListener(e -> {
-                try {
-                    doExport();
-                } catch (IOException ex) {
-                    throw new RuntimeException(ex);
-                }
-            });
-            jtFilter.addActionListener(e -> {
-                refresh();
-            });
-
-            init = true;
-        }
-    }
-
-    public FormTransactions(FormMenu parent) {
-        super(parent);
-
-        this.parent = parent;
-
-        init();
-
-        JPanel main = new JPanel();
-        main.setLayout(new BorderLayout());
-        main.setBorder(BorderFactory.createEmptyBorder(gap, gap, gap, gap));
-
-        JPanel jp1 = new JPanel(new GridLayout(2, 1));
-        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, gap, gap));
-        btnPanel.add(jbNew);
-        btnPanel.add(jbEdit);
-        btnPanel.add(jbDel);
-        btnPanel.add(jbPost);
-        btnPanel.add(jbUnPost);
-        btnPanel.add(jbRefresh);
-        btnPanel.add(jbExport);
-        jp1.add(btnPanel);
-        jp1.add(jtFilter);
-        main.add(jp1, BorderLayout.NORTH);
-
-        table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
-        table.setRowHeight(Config.getDotsPerSquare());
-        JScrollPane jsp = new JScrollPane(table);
-        main.add(jsp, BorderLayout.CENTER);
-
-        main.add(lbStatus, BorderLayout.SOUTH);
-
-        getContentPane().setLayout(new BorderLayout());
-        getContentPane().add(main, BorderLayout.CENTER);
-
-        setTitle("Transactions");
-        setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
-        setLocationRelativeTo(null);
-        setSize(800, 600);
-    }
+    setTitle("Transactions");
+    setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
+    setLocationRelativeTo(null);
+    setSize(800, 600);
+  }
 }
