@@ -5,21 +5,12 @@ import home.ejaz.ledger.models.Transaction;
 import home.ejaz.ledger.util.DbUtils;
 import org.apache.commons.lang3.StringUtils;
 import org.apache.log4j.Logger;
-import org.apache.spark.sql.Dataset;
-import org.apache.spark.sql.Row;
-import org.apache.spark.sql.RowFactory;
-import org.apache.spark.sql.SparkSession;
-import org.apache.spark.sql.types.DataTypes;
-import org.apache.spark.sql.types.Metadata;
-import org.apache.spark.sql.types.StructField;
-import org.apache.spark.sql.types.StructType;
 
 import java.sql.Connection;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
-import java.util.List;
 
 public class DAOTransaction {
   private static DAOTransaction instance = new DAOTransaction();
@@ -30,39 +21,6 @@ public class DAOTransaction {
   }
 
   private DAOTransaction() {
-  }
-
-  private SparkSession spark = DbUtils.getSparkSession();
-
-  protected Dataset<Row> getTransactionsDS() throws SQLException {
-    StructType schema = new StructType(new StructField[]{
-      new StructField("tid", DataTypes.LongType, false, Metadata.empty()),
-      new StructField("tx_date", DataTypes.DateType, false, Metadata.empty()),
-      new StructField("bucket", DataTypes.IntegerType, false, Metadata.empty()),
-      new StructField("amount", DataTypes.createDecimalType(10, 2), false, Metadata.empty()),
-      new StructField("note", DataTypes.StringType, false, Metadata.empty()),
-      new StructField("posted", DataTypes.BooleanType, false, Metadata.empty())
-    });
-
-    List<Row> transactions = new ArrayList<>();
-    try (Connection conn = DbUtils.getConnection()) {
-      try (PreparedStatement ps = conn.prepareStatement(
-        "select * from Transactions t")) {
-        try (ResultSet rs = ps.executeQuery()) {
-          while (rs.next()) {
-            transactions.add(RowFactory.create(
-              rs.getInt("id"),
-              rs.getDate("tx_date"),
-              rs.getInt("bucket"),
-              rs.getBigDecimal("amount"),
-              rs.getString("note"),
-              rs.getBoolean("posted")));
-          }
-        }
-      }
-    }
-
-    return spark.createDataFrame(transactions, schema);
   }
 
   public java.util.List<Transaction> getTransactions(String filter) throws SQLException {
