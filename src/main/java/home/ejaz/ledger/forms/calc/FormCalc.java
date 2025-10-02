@@ -1,24 +1,21 @@
 package home.ejaz.ledger.forms.calc;
 
-import com.ezylang.evalex.EvaluationException;
 import com.ezylang.evalex.Expression;
 import com.ezylang.evalex.data.EvaluationValue;
-import com.ezylang.evalex.parser.ParseException;
 import home.ejaz.ledger.Config;
 import home.ejaz.ledger.FormMenu;
+import org.apache.log4j.Logger;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.KeyAdapter;
-import java.awt.event.KeyEvent;
 
 public class FormCalc extends JDialog {
-  private FormMenu parent;
-  private int gap = Config.getGap();
-  private JLabel result = new JLabel("...");
-  private JTextArea expr = new JTextArea();
-  private JButton calc = new JButton("Calc");
-  private JButton clear = new JButton("Clear");
+  private final Logger logger = Logger.getLogger(FormCalc.class);
+
+  private final JLabel result = new JLabel("...");
+  private final JTextArea expr = new JTextArea();
+  private final JButton calc = new JButton("Calc");
+  private final JButton clear = new JButton("Clear");
   private boolean init = false;
 
   private void clear() {
@@ -43,7 +40,7 @@ public class FormCalc extends JDialog {
           EvaluationValue value = expression.evaluate();
           result.setText("" + value.getNumberValue());
         } catch (Exception ex) {
-          ex.printStackTrace();
+          logger.warn("Error", ex);
         }
       });
 
@@ -54,10 +51,10 @@ public class FormCalc extends JDialog {
   public FormCalc(FormMenu parent) {
     super(parent);
 
-    this.parent = parent;
     init();
 
     JPanel main = new JPanel();
+    int gap = Config.getGap();
     main.setLayout(new BorderLayout(gap, gap));
     main.setBorder(BorderFactory.createEmptyBorder(gap, gap, gap, gap));
 

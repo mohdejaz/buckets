@@ -20,19 +20,18 @@ import java.awt.event.KeyListener;
 import java.math.BigDecimal;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.Objects;
 
 public class FormTransaction extends JDialog {
-  private static final Logger logger = Logger.getLogger(FormTransaction.class.getName());
+  private final Logger logger = Logger.getLogger(FormTransaction.class);
 
-  private int gap = Config.getGap();
-  private ELayout layout = new ELayout(5, 15, Config.getDotsPerSquare(), gap);
-  private JTextField jtfId = new JTextField();
-  private DatePicker picker = new JDatePicker(new UtilDateModel());
-  private JComboBox jcBucket = new JComboBox();
-  private JTextField jtfAmount = new JTextField();
-  private JTextField jtfNote = new JTextField();
-  private JButton jbClear = new JButton("Clear");
-  private JButton jbSave = new JButton("Save");
+  private final JTextField jtfId = new JTextField();
+  private final DatePicker picker = new JDatePicker(new UtilDateModel());
+  private final JComboBox<String>jcBucket = new JComboBox<>();
+  private final JTextField jtfAmount = new JTextField();
+  private final JTextField jtfNote = new JTextField();
+  private final JButton jbClear = new JButton("Clear");
+  private final JButton jbSave = new JButton("Save");
   private Date lastDate = new Date();
   private boolean init = false;
   private boolean txAdded = false;
@@ -45,7 +44,7 @@ public class FormTransaction extends JDialog {
         this.jcBucket.addItem(bucket.name);
       }
     } catch (Exception e) {
-      e.printStackTrace();
+      logger.warn("Error", e);
       System.exit(1);
     }
   }
@@ -92,7 +91,7 @@ public class FormTransaction extends JDialog {
       clear(true);
       setVisible(false);
     } catch (Exception e) {
-      e.printStackTrace();
+      logger.warn("Error", e);
     }
   }
 
@@ -120,9 +119,7 @@ public class FormTransaction extends JDialog {
 
       jbSave.addActionListener(al -> doSave());
 
-      jbClear.addActionListener(al -> {
-        clear(false);
-      });
+      jbClear.addActionListener(al -> clear(false));
 
       init = true;
     }
@@ -147,7 +144,7 @@ public class FormTransaction extends JDialog {
     Transaction tx = new Transaction();
     tx.id = !jtfId.getText().isEmpty() ? Long.parseLong(jtfId.getText()) : null;
     tx.txDate = getDateFromPicker();
-    tx.bucket = jcBucket.getSelectedItem().toString();
+    tx.bucket = Objects.requireNonNull(jcBucket.getSelectedItem()).toString();
     tx.amount = !jtfAmount.getText().isEmpty() ? new BigDecimal(jtfAmount.getText()) : null;
     tx.note = jtfNote.getText();
     System.out.println("tx --> " + tx);
@@ -169,6 +166,8 @@ public class FormTransaction extends JDialog {
 
     JPanel main = new JPanel();
 
+    int gap = Config.getGap();
+    ELayout layout = new ELayout(5, 15, Config.getDotsPerSquare(), gap);
     main.setLayout(layout);
     main.setBorder(BorderFactory.createEmptyBorder(gap, gap, gap, gap));
 

@@ -24,20 +24,16 @@ public class Config {
     return props.getProperty(key, defValue);
   }
 
-  public static double getRefillFactor() {
-    return new Double(getValue("refill.factor", "0.5"));
-  }
-
   public static int getFontSize() {
-    return new Integer(getValue("font.size", "14"));
+    return Integer.parseInt(getValue("font.size", "14"));
   }
 
   public static int getGap() {
-    return new Integer(getValue("gap", "7"));
+    return Integer.parseInt(getValue("gap", "7"));
   }
 
   public static int getDotsPerSquare() {
-    return new Integer(getValue("dps", "30"));
+    return Integer.parseInt(getValue("dps", "30"));
   }
 
   public static String getDBUrl() {
@@ -62,5 +58,27 @@ public class Config {
 
   public static int getGutterSize() {
     return Integer.parseInt(getValue("gutter.size", "10"));
+  }
+
+  public static int getUserId() {
+    return Integer.parseInt(getValue("user.id", "1"));
+  }
+
+  public static int getAcctId() {
+    return Integer.parseInt(getValue("acct.id", "1"));
+  }
+
+  public static String getTitle() {
+    return getValue("title", "Budget");
+  }
+
+  public static boolean enableRefill() {
+    System.out.println("enabled.refill: " + getValue("enabled.refill", "true"));
+    return Boolean.parseBoolean(getValue("enabled.refill", "true"));
+  }
+
+  public static boolean enableReset() {
+    System.out.println("enabled.reset: " + getValue("enabled.reset", "true"));
+    return Boolean.parseBoolean(getValue("enabled.reset", "true"));
   }
 }

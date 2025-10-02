@@ -18,27 +18,28 @@ import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.time.LocalDate;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Date;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 public class FormBuckets extends JDialog {
   private static final Logger logger = Logger.getLogger(FormBuckets.class.getName());
 
-  private JButton jbNew = new JButton("New");
-  private JButton jbEdit = new JButton("Edit");
-  private JButton jbRefill = new JButton("Refill");
-  private JButton jbReset = new JButton("Reset");
+  private final JButton jbNew = new JButton("New");
+  private final JButton jbEdit = new JButton("Edit");
+  private final JButton jbRefill = new JButton("Refill");
+  private final JButton jbReset = new JButton("Reset");
 
-  private BucketsTableModel bucketsTableModel = new BucketsTableModel();
-  private JTable table = new JTable(bucketsTableModel);
-  private JLabel lbStatus = new JLabel("Status ...");
+  private final BucketsTableModel bucketsTableModel = new BucketsTableModel();
+  private final JTable table = new JTable(bucketsTableModel);
+  private final JLabel lbStatus = new JLabel("Status ...");
 
-  private int gap = Config.getGap();
-  private java.util.List<Bucket> list = new ArrayList<>();
+  private final java.util.List<Bucket> list = new ArrayList<>();
   private FormBucket formBucket;
   private boolean init = false;
   private int lastSelectBk = -1;
-  private FormMenu parent;
-  private Date date;
+  private final FormMenu parent;
 
   private void refresh() {
     try {
@@ -56,7 +57,7 @@ public class FormBuckets extends JDialog {
       }
       lbStatus.setText(" Balance: " + balance);
     } catch (Exception e) {
-      e.printStackTrace();
+      logger.warn("Error", e);
       System.exit(1);
     }
   }
@@ -69,6 +70,16 @@ public class FormBuckets extends JDialog {
   }
 
   private void doBuckEdit() {
+    Set<Integer> selectedRows = Arrays.stream(this.table.getSelectedRows()).boxed().collect(Collectors.toSet());
+    if (selectedRows.size() != 1) {
+      JOptionPane.showMessageDialog(
+        this, // Parent component (can be null for a default Frame)
+        "Zero/1+ rows selected for refill. Please try again.", // The message to display
+        "Error", // The title of the dialog box
+        JOptionPane.ERROR_MESSAGE // The message type, which determines the icon and style
+      );
+    }
+
     int row = table.getSelectedRow();
     if (row != -1) {
       formBucket.init();
@@ -107,19 +118,30 @@ public class FormBuckets extends JDialog {
   public void doBuckRefill() throws SQLException {
     DAOTransaction daoTransaction = DAOTransaction.getInstance();
     LocalDate dt = LocalDate.now();
+    Set<Integer> selectedRows = Arrays.stream(this.table.getSelectedRows()).boxed().collect(Collectors.toSet());
+    if (selectedRows.isEmpty()) {
+      JOptionPane.showMessageDialog(
+        this, // Parent component (can be null for a default Frame)
+        "No rows selected for refill. Please try again.", // The message to display
+        "Error", // The title of the dialog box
+        JOptionPane.ERROR_MESSAGE // The message type, which determines the icon and style
+      );
+    }
     for (int i = 0; i < bucketsTableModel.getRowCount(); i++) {
-      Bucket bucket = bucketsTableModel.getBucket(i);
-      logger.info("Refilling " + bucket.name + " --");
-      Transaction tx = new Transaction();
-      tx.bucket = bucket.name;
-      tx.amount = bucket.budget.multiply(new BigDecimal(Config.getRefillFactor()));
-      tx.note = "Refill";
-      tx.txDate = java.sql.Date.valueOf(
-        (dt.getDayOfMonth() < 15) ? dt.withDayOfMonth(1) : dt.withDayOfMonth(15));
-      daoTransaction.save(tx);
-      logger.info("TX Saved --");
-      refresh();
-      parent.bkUpdate(bucket.id);
+      if (selectedRows.contains(i)) {
+        Bucket bucket = bucketsTableModel.getBucket(i);
+        logger.info("Refilling " + bucket.name + " --");
+        Transaction tx = new Transaction();
+        tx.bucket = bucket.name;
+        tx.amount = bucket.budget.multiply(BigDecimal.valueOf(bucket.refill));
+        tx.note = "Refill";
+        tx.txDate = java.sql.Date.valueOf(
+          (dt.getDayOfMonth() < 15) ? dt.withDayOfMonth(1) : dt.withDayOfMonth(15));
+        daoTransaction.save(tx);
+        logger.info("TX Saved --");
+        refresh();
+        parent.bkUpdate(bucket.id);
+      }
     }
   }
 
@@ -165,7 +187,7 @@ public class FormBuckets extends JDialog {
         try {
           doBuckRefill();
         } catch (SQLException e) {
-          e.printStackTrace();
+          logger.warn("Error", e);
           throw new RuntimeException(e);
         }
       });
@@ -173,7 +195,7 @@ public class FormBuckets extends JDialog {
         try {
           doBuckReset();
         } catch (SQLException e) {
-          e.printStackTrace();
+          logger.warn("Error", e);
           throw new RuntimeException(e);
         }
       });
@@ -191,6 +213,7 @@ public class FormBuckets extends JDialog {
 
     JPanel main = new JPanel();
     main.setLayout(new BorderLayout());
+    int gap = Config.getGap();
     main.setBorder(BorderFactory.createEmptyBorder(gap, gap, gap, gap));
 
     JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
@@ -200,7 +223,10 @@ public class FormBuckets extends JDialog {
     btnPanel.add(jbReset);
     main.add(btnPanel, BorderLayout.NORTH);
 
-    table.setSelectionMode(ListSelectionModel.SINGLE_SELECTION);
+    jbRefill.setEnabled(Config.enableRefill());
+    jbReset.setEnabled(Config.enableReset());
+
+    table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
     table.setRowHeight(Config.getDotsPerSquare());
     JScrollPane jsp = new JScrollPane(table);
     main.add(jsp, BorderLayout.CENTER);

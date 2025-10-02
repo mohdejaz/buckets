@@ -79,7 +79,7 @@ public class FormMenu extends JFrame implements LedgerListener {
 
     setJMenuBar(mb);
 
-    setTitle("Budget");
+    setTitle(Config.getTitle());
     setDefaultCloseOperation(EXIT_ON_CLOSE);
     setAlwaysOnTop(true);
     setSize(150, 200);
@@ -95,7 +95,7 @@ public class FormMenu extends JFrame implements LedgerListener {
 
     JLabel message = new JLabel(
       "<html>" +
-        "<b>Welcome to Ejaz family budget tool!</b>" +
+        "<b>Welcome to budget tool!</b>" +
         "<br>Use menu to manage buckets,transactions and calculator." +
         "<br>You can exit by Menu > Exit or clicking on X on top right corner." +
         "<br><br>Feel free to close child windows, they will retain their state." +

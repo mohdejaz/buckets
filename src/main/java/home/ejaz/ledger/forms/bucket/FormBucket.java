@@ -5,6 +5,7 @@ import home.ejaz.ledger.dao.DAOBucket;
 import home.ejaz.ledger.layout.EConstaint;
 import home.ejaz.ledger.layout.ELayout;
 import home.ejaz.ledger.models.Bucket;
+import org.apache.log4j.Logger;
 
 import javax.swing.*;
 import java.awt.*;
@@ -14,13 +15,14 @@ import java.awt.event.KeyListener;
 import java.math.BigDecimal;
 
 public class FormBucket extends JDialog {
-  private int gap = Config.getGap();
-  private ELayout layout = new ELayout(4, 10, Config.getDotsPerSquare(), gap);
-  private JTextField jtfId = new JTextField();
-  private JTextField jtfName = new JTextField();
-  private JTextField jtfBudget = new JTextField();
-  private JButton jbClear = new JButton("Clear");
-  private JButton jbSave = new JButton("Save");
+  private static final Logger logger = Logger.getLogger(FormBucket.class.getName());
+
+  private final JTextField jtfId = new JTextField();
+  private final JTextField jtfName = new JTextField();
+  private final JTextField jtfBudget = new JTextField();
+  private final JTextField jtfRefFac = new JTextField();
+  private final JButton jbClear = new JButton("Clear");
+  private final JButton jbSave = new JButton("Save");
   private boolean init = false;
 
   public void init() {
@@ -65,7 +67,7 @@ public class FormBucket extends JDialog {
       clear();
       this.setVisible(false);
     } catch (Exception e) {
-      e.printStackTrace();
+      logger.warn("Error", e);
     }
   }
 
@@ -89,13 +91,15 @@ public class FormBucket extends JDialog {
     jtfId.setText(bucket.id == null ? "" : bucket.id.toString());
     jtfName.setText(bucket.name == null ? "" : bucket.name);
     jtfBudget.setText(bucket.budget == null ? "" : bucket.budget.toString());
+    jtfRefFac.setText(bucket.refill == null ? "" : bucket.refill.toString());
   }
 
   public Bucket getBucket() {
     Bucket bucket = new Bucket();
-    bucket.id = jtfId.getText().isEmpty() ? null : new Integer(jtfId.getText());
+    bucket.id = jtfId.getText().isEmpty() ? null : Integer.valueOf(jtfId.getText());
     bucket.name = jtfName.getText().trim().isEmpty() ? null : jtfName.getText().trim();
     bucket.budget = jtfBudget.getText().trim().isEmpty() ? null : new BigDecimal(jtfBudget.getText().trim());
+    bucket.refill = jtfRefFac.getText().trim().isEmpty() ? null: Double.parseDouble(jtfRefFac.getText());
 
     return bucket;
   }
@@ -107,6 +111,8 @@ public class FormBucket extends JDialog {
 
     JPanel main = new JPanel();
 
+    int gap = Config.getGap();
+    ELayout layout = new ELayout(5, 10, Config.getDotsPerSquare(), gap);
     main.setLayout(layout);
     main.setBorder(BorderFactory.createEmptyBorder(gap, gap, gap, gap));
 
@@ -131,10 +137,17 @@ public class FormBucket extends JDialog {
     layout.setConstraints(jtfBudget, new EConstaint(3, 4, 3, 1));
     main.add(jtfBudget);
 
-    layout.setConstraints(jbClear, new EConstaint(4, 5, 3, 1));
+    JLabel jlbRefFactor = new JLabel("Ref %:");
+    layout.setConstraints(jlbRefFactor, new EConstaint(4, 1, 3, 1));
+    main.add(jlbRefFactor);
+
+    layout.setConstraints(jtfRefFac, new EConstaint(4, 4, 3, 1));
+    main.add(jtfRefFac);
+
+    layout.setConstraints(jbClear, new EConstaint(5, 5, 3, 1));
     main.add(jbClear);
 
-    layout.setConstraints(jbSave, new EConstaint(4, 8, 3, 1));
+    layout.setConstraints(jbSave, new EConstaint(5, 8, 3, 1));
     main.add(jbSave);
 
     getContentPane().setLayout(new BorderLayout());
