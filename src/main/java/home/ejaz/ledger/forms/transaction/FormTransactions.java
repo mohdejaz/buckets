@@ -6,6 +6,8 @@ import home.ejaz.ledger.FormMenu;
 import home.ejaz.ledger.dao.DAOTransaction;
 import home.ejaz.ledger.models.Transaction;
 import home.ejaz.ledger.models.TransactionsTableModel;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
 import java.awt.*;
@@ -21,7 +23,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 
 public class FormTransactions extends JDialog {
-  // private static final Logger logger = Logger.getLogger(FormTransactions.class);
+  private static Logger logger = LoggerFactory.getLogger(FormTransactions.class);
 
   private final JButton jbNew = new JButton("New");
   private final JButton jbEdit = new JButton("Edit");

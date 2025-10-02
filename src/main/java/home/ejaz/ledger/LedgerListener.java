@@ -13,4 +13,6 @@ public interface LedgerListener {
   void bkUpdate(int id);
 
   void bkDelete(int id);
+
+  void acctSelected(int id);
 }

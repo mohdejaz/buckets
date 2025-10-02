@@ -34,6 +34,7 @@ public class DAOTransaction {
           " WHERE b.acct_id = ? " +
           " ORDER by t.tx_date desc, t.id desc)" +
           " WHERE " + (!StringUtils.isEmpty(filter) ? filter : "1 = 1"))) {
+        logger.info("sel acct: " + Config.getAcctId());
         ps.setInt(1, Config.getAcctId());
         try (ResultSet rs = ps.executeQuery()) {
           while (rs.next()) {

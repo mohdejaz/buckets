@@ -1,10 +1,13 @@
 package home.ejaz.ledger;
 
+import org.apache.log4j.Logger;
 import java.util.Properties;
 
 public class Config {
   private static String prof = "dev";
   private static Properties props;
+  private static int acctId = -1;
+  private static final org.apache.log4j.Logger logger = Logger.getLogger(Config.class.getName());
 
   static {
     try {
@@ -64,8 +67,14 @@ public class Config {
     return Integer.parseInt(getValue("user.id", "1"));
   }
 
-  public static int getAcctId() {
+  public synchronized static int getAcctId() {
+    if (acctId != -1) return acctId;
     return Integer.parseInt(getValue("acct.id", "1"));
+  }
+
+  public synchronized static void setAcctId(int value) {
+    logger.info("Prev acct_id: " + acctId + " New value: " + value);
+    acctId = value;
   }
 
   public static String getTitle() {

@@ -1,0 +1,63 @@
+package home.ejaz.ledger.models;
+
+import javax.swing.table.AbstractTableModel;
+import java.math.BigDecimal;
+import java.util.ArrayList;
+import java.util.List;
+
+public class AccountsTableModel extends AbstractTableModel implements NumberModel {
+  private String[] colNames = new String[]{"", "Id", "Name", "Balance"};
+  private List<Account> accounts = new ArrayList<>();
+
+  @Override
+  public int getRowCount() {
+    return accounts.size();
+  }
+
+  @Override
+  public int getColumnCount() {
+    return colNames.length;
+  }
+
+  @Override
+  public String getColumnName(int i) {
+    return colNames[i];
+  }
+
+  @Override
+  public Object getValueAt(int rowIndex, int columnIndex) {
+    Account account = accounts.get(rowIndex);
+    return switch (columnIndex) {
+      case 0 -> account.selected ? "*" : "";
+      case 1 -> account.id;
+      case 2 -> account.name;
+      case 3 -> account.balance;
+      default -> null;
+    };
+  }
+
+  @Override
+  public Class getColumnClass(int columnIndex) {
+    return switch (columnIndex) {
+      case 1 -> Integer.class;
+      case 3 -> BigDecimal.class;
+      default -> String.class;
+    };
+  }
+
+  public void setAccounts(List<Account> accounts) {
+    this.accounts.clear();
+    this.accounts.addAll(accounts);
+    this.fireTableDataChanged();
+  }
+
+  public Account getAccount(int row) {
+    return accounts.get(row);
+  }
+
+  @Override
+  public Number getValue(int row) {
+    Account acct = accounts.get(row);
+    return acct == null ? null : acct.balance;
+  }
+}
