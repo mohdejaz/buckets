@@ -1,7 +1,7 @@
 package home.ejaz.ledger;
 
-import home.ejaz.ledger.layout.EConstaint;
-import home.ejaz.ledger.layout.ELayout;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
 import javax.swing.plaf.FontUIResource;
@@ -9,101 +9,9 @@ import java.awt.*;
 
 
 public class Main extends JFrame {
+  private final static Logger logger = LoggerFactory.getLogger(Main.class);
 
   public Main() {
-    ELayout glm = new ELayout(10, 18, 30, 7);
-    JPanel main = new JPanel();
-    main.setBorder(BorderFactory.createEmptyBorder(5, 5, 5, 5));
-    main.setLayout(glm);
-
-    // row 1
-    JLabel lbId = new JLabel("Id: ", JLabel.LEADING);
-    glm.setConstraints(lbId, new EConstaint(1, 1, 3, 1));
-    main.add(lbId);
-
-    JTextField tfId = new JTextField();
-    glm.setConstraints(tfId, new EConstaint(1, 4, 6, 1));
-    main.add(tfId);
-
-    // row 2
-    JLabel lbDate = new JLabel("Date: ", JLabel.LEADING);
-    glm.setConstraints(lbDate, new EConstaint(2, 1, 3, 1));
-    main.add(lbDate);
-
-    JTextField tfDate = new JTextField();
-    glm.setConstraints(tfDate, new EConstaint(2, 4, 6, 1));
-    main.add(tfDate);
-
-    JLabel lbBucket = new JLabel("Bucket: ", JLabel.LEADING);
-    glm.setConstraints(lbBucket, new EConstaint(2, 10, 3, 1));
-    main.add(lbBucket);
-
-    JComboBox jcBucket = new JComboBox(new String[]{"Apples", "Oranges", "Bananas", "Kiwis"});
-    glm.setConstraints(jcBucket, new EConstaint(2, 13, 6, 1));
-    main.add(jcBucket);
-
-    // row 3
-    JLabel lbMerchant = new JLabel("Merchant: ", JLabel.LEADING);
-    glm.setConstraints(lbMerchant, new EConstaint(3, 1, 3, 1));
-    main.add(lbMerchant);
-
-    JTextField tfMerchant = new JTextField();
-    glm.setConstraints(tfMerchant, new EConstaint(3, 4, 6, 1));
-    main.add(tfMerchant);
-
-    JLabel lbBudget = new JLabel("Bucket: ", JLabel.LEADING);
-    glm.setConstraints(lbBudget, new EConstaint(3, 10, 3, 1));
-    main.add(lbBudget);
-
-    JTextField tfBudget = new JTextField();
-    glm.setConstraints(tfBudget, new EConstaint(3, 13, 6, 1));
-    main.add(tfBudget);
-
-    // row 4
-    JLabel lbAmount = new JLabel("Amount: ", JLabel.LEADING);
-    glm.setConstraints(lbAmount, new EConstaint(4, 1, 3, 1));
-    main.add(lbAmount);
-
-    JTextField tfAmount = new JTextField();
-    glm.setConstraints(tfAmount, new EConstaint(4, 4, 6, 1));
-    main.add(tfAmount);
-
-    JLabel lbBalance = new JLabel("Balance: ", JLabel.LEADING);
-    glm.setConstraints(lbBalance, new EConstaint(4, 10, 3, 1));
-    main.add(lbBalance);
-
-    JTextField tfBalance = new JTextField();
-    glm.setConstraints(tfBalance, new EConstaint(4, 13, 6, 1));
-    main.add(tfBalance);
-
-    // row 5
-    JLabel lbNotes = new JLabel("Notes: ", JLabel.LEADING);
-    lbNotes.setVerticalAlignment(JLabel.TOP);
-    glm.setConstraints(lbNotes, new EConstaint(5, 1, 3, 1));
-    main.add(lbNotes);
-
-    JTextArea jta = new JTextArea();
-    JScrollPane jsp = new JScrollPane(jta);
-    glm.setConstraints(jsp, new EConstaint(5, 4, 15, 5));
-    main.add(jsp);
-
-    // row 6
-    JButton jbClear = new JButton("Clear");
-    glm.setConstraints(jbClear, new EConstaint(10, 14, 3, 1));
-    main.add(jbClear);
-
-    JButton jbSave = new JButton("Save");
-    glm.setConstraints(jbSave, new EConstaint(10, 17, 2, 1));
-    main.add(jbSave);
-
-
-    getContentPane().setLayout(new BorderLayout());
-    getContentPane().add(main, BorderLayout.CENTER);
-
-    setResizable(false);
-    setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-    pack();
-    setVisible(true);
   }
 
   private static void setFont(FontUIResource myFont) {
@@ -155,12 +63,16 @@ public class Main extends JFrame {
   }
 
   public static void main(String[] args) throws Exception {
+    System.out.println("Inside main --");
+
+    try {
+      UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+    } catch (ClassNotFoundException | InstantiationException | IllegalAccessException |
+             UnsupportedLookAndFeelException e) {
+      e.printStackTrace(System.err);
+    }
+
     setFont(new FontUIResource(new Font("Verdana", Font.PLAIN, Config.getFontSize())));
-    /*
-    UIManager.setLookAndFeel(
-      UIManager.getSystemLookAndFeelClassName());
-    // new Main();
-     */
     new FormMenu();
   }
 }

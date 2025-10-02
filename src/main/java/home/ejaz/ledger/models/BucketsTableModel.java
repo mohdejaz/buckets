@@ -6,7 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class BucketsTableModel extends AbstractTableModel implements NumberModel {
-  private String[] colNames = new String[]{"", "Id", "Name", "Budget", "Refill", "Balance"};
+  private String[] colNames = new String[]{"", "Id", "Name", "Budget", "Ref.MTD", "Ref.X", "Balance"};
   private List<Bucket> buckets = new ArrayList<>();
 
   @Override
@@ -44,6 +44,9 @@ public class BucketsTableModel extends AbstractTableModel implements NumberModel
         return bucket.refillMtd;
       }
       case 5: {
+        return bucket.refill;
+      }
+      case 6: {
         return bucket.balance;
       }
       default:
@@ -65,6 +68,8 @@ public class BucketsTableModel extends AbstractTableModel implements NumberModel
       case 4:
         return BigDecimal.class;
       case 5:
+        return Double.class;
+      case 6:
         return BigDecimal.class;
       default:
         return String.class;

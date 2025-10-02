@@ -59,10 +59,10 @@ public class ELayout implements LayoutManager {
       EConstaint cs = csMap.get(c);
       // log(idx + ";" + cs);
       if (c.isVisible()) {
-        x = insets.left + (cs.col - 1) * dps + (cs.col - 1) * gap + gap;
-        y = insets.top + (cs.row - 1) * dps + (cs.row - 1) * gap + gap;
-        w = cs.width * dps + (cs.width - 1) * gap;
-        h = cs.height * dps + (cs.height - 1) * gap;
+        x = insets.left + (cs.col() - 1) * dps + (cs.col() - 1) * gap + gap;
+        y = insets.top + (cs.row() - 1) * dps + (cs.row() - 1) * gap + gap;
+        w = cs.width() * dps + (cs.width() - 1) * gap;
+        h = cs.height() * dps + (cs.height() - 1) * gap;
 
         // log("x=" + x + ";y=" + y + ";w=" + w + ";h=" + h);
         c.setBounds(x, y, w, h);

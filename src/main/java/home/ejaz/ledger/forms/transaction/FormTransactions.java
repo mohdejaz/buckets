@@ -6,7 +6,6 @@ import home.ejaz.ledger.FormMenu;
 import home.ejaz.ledger.dao.DAOTransaction;
 import home.ejaz.ledger.models.Transaction;
 import home.ejaz.ledger.models.TransactionsTableModel;
-import org.apache.log4j.Logger;
 
 import javax.swing.*;
 import java.awt.*;
@@ -22,26 +21,25 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 
 public class FormTransactions extends JDialog {
-  private static final Logger logger = Logger.getLogger(FormTransactions.class.getName());
+  // private static final Logger logger = Logger.getLogger(FormTransactions.class);
 
-  private JButton jbNew = new JButton("New");
-  private JButton jbEdit = new JButton("Edit");
-  private JButton jbDel = new JButton("Del");
-  private JButton jbPost = new JButton("Post");
-  private JButton jbUnPost = new JButton("UnPost");
-  private JButton jbRefresh = new JButton("Refresh");
-  private JButton jbExport = new JButton("Export");
-  private JTextField jtFilter = new JTextField("");
-  private JLabel lbStatus = new JLabel("Status ...");
+  private final JButton jbNew = new JButton("New");
+  private final JButton jbEdit = new JButton("Edit");
+  private final JButton jbDel = new JButton("Del");
+  private final JButton jbPost = new JButton("Post");
+  private final JButton jbUnPost = new JButton("UnPost");
+  private final JButton jbRefresh = new JButton("Refresh");
+  private final JButton jbExport = new JButton("Export");
+  private final JTextField jtFilter = new JTextField("");
+  private final JLabel lbStatus = new JLabel("Status ...");
 
-  private int gap = Config.getGap();
-  private java.util.List<Transaction> list = new ArrayList<>();
-  private TransactionsTableModel txTableModel = new TransactionsTableModel();
-  private JTable table = new JTable(txTableModel);
+  private final java.util.List<Transaction> list = new ArrayList<>();
+  private final TransactionsTableModel txTableModel = new TransactionsTableModel();
+  private final JTable table = new JTable(txTableModel);
   private FormTransaction formTransaction;
   private boolean init = false;
   private long lastSelectTx = -1;
-  private FormMenu parent;
+  private final FormMenu parent;
 
   private BigDecimal getBalance() {
     BigDecimal balance = BigDecimal.ZERO;
@@ -209,9 +207,7 @@ public class FormTransactions extends JDialog {
           throw new RuntimeException(ex);
         }
       });
-      jtFilter.addActionListener(e -> {
-        refresh();
-      });
+      jtFilter.addActionListener(e -> refresh());
 
       init = true;
     }
@@ -226,6 +222,7 @@ public class FormTransactions extends JDialog {
 
     JPanel main = new JPanel();
     main.setLayout(new BorderLayout());
+    int gap = Config.getGap();
     main.setBorder(BorderFactory.createEmptyBorder(gap, gap, gap, gap));
 
     JPanel jp1 = new JPanel(new GridLayout(2, 1));
