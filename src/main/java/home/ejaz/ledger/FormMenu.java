@@ -39,6 +39,7 @@ public class FormMenu extends JFrame implements LedgerListener {
         acctsTableModel.setAccounts(accounts);
         accounts.get(0).selected = true;
         Config.setAcctId(accounts.get(0).id);
+        Config.setTitle(accounts.get(0).name);
         this.acctSelected(accounts.get(0).id);
       }
 
@@ -69,6 +70,7 @@ public class FormMenu extends JFrame implements LedgerListener {
             acct.selected = i == row;
             if (acct.selected) {
               Config.setAcctId(accounts.get(i).id);
+              Config.setTitle(accounts.get(i).name);
               this.acctSelected(accounts.get(i).id);
             }
           }
@@ -124,7 +126,7 @@ public class FormMenu extends JFrame implements LedgerListener {
     setTitle(Config.getTitle());
     setDefaultCloseOperation(EXIT_ON_CLOSE);
     setAlwaysOnTop(true);
-    setSize(600, 300);
+    setSize(500, 300);
     // pack();
     setVisible(true);
   }
@@ -185,6 +187,7 @@ public class FormMenu extends JFrame implements LedgerListener {
   @Override
   public void acctSelected(int id) {
     logger.info("acctSelected --");
+    setTitle(Config.getTitle());
     if (this.formTransactions != null) {
       this.formTransactions.init();
     }

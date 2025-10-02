@@ -4,10 +4,11 @@ import org.apache.log4j.Logger;
 import java.util.Properties;
 
 public class Config {
+  private static final org.apache.log4j.Logger logger = Logger.getLogger(Config.class.getName());
   private static String prof = "dev";
   private static Properties props;
   private static int acctId = -1;
-  private static final org.apache.log4j.Logger logger = Logger.getLogger(Config.class.getName());
+  private static String title = "Buckets";
 
   static {
     try {
@@ -77,8 +78,12 @@ public class Config {
     acctId = value;
   }
 
-  public static String getTitle() {
-    return getValue("title", "Budget");
+  public synchronized static String getTitle() {
+    return getValue("title","Buckets") + " - " + title;
+  }
+
+  public synchronized static void setTitle(String value) {
+    title = value;
   }
 
   public static boolean enableRefill() {

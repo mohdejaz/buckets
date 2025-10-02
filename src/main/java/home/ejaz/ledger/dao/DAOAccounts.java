@@ -29,7 +29,8 @@ public class DAOAccounts {
 
     try (Connection conn = DbUtils.getConnection()) {
       try (PreparedStatement ps = conn.prepareStatement(
-        " select a.id, a.name, a.user_id, sum(t.amount) balance" +
+        " -- query\n" +
+          " select a.id, a.name, a.user_id, sum(t.amount) balance" +
           " from Accounts a inner join Buckets b on b.acct_id = a.id" +
           " inner join Transactions t on t.bucket = b.id" +
           " where a.user_id = ?" +
