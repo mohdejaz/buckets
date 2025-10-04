@@ -13,6 +13,13 @@ import java.awt.*;
 import java.util.ArrayList;
 import java.util.function.BiFunction;
 
+/**
+ * Main form with menu & Accounts table.
+ * Allows user to open Buckets, Transactions & Calculator screens.
+ *
+ * @author Ejaz Mohammed
+ * @since 1.0
+ */
 public class FormMenu extends JFrame implements LedgerListener {
   private static final Logger logger = Logger.getLogger(FormMenu.class.getName());
 
@@ -39,6 +46,7 @@ public class FormMenu extends JFrame implements LedgerListener {
   BiFunction<Account, Integer, Boolean> selectById =
     (acct, index) -> acct.id == Config.getAcctId();
 
+  /* Common Accounts table update */
   private void updateSelection(BiFunction<Account, Integer, Boolean> selector) {
     for (int i = 0; i < accounts.size(); i++) {
       Account acct = acctsTableModel.getAccount(i);
@@ -53,6 +61,7 @@ public class FormMenu extends JFrame implements LedgerListener {
     acctsTableModel.fireTableDataChanged();
   }
 
+  /* This method is called when bucket/transaction updates */
   private void refresh() {
     accounts.clear();
     accounts.addAll(DAOAccounts.getInstance().getAccounts());
@@ -114,9 +123,10 @@ public class FormMenu extends JFrame implements LedgerListener {
 
     mb.add(mMenu);
 
-    JPanel main = getJPanel();
+    JPanel main = new JPanel();
+    main.setBorder(BorderFactory.createEmptyBorder(7,7,7,7));
     main.setLayout(new BorderLayout(3, 3));
-    main.add(new JLabel("Your Accounts (selected account marked by *):"), BorderLayout.NORTH);
+    main.add(new JLabel("Your Accounts (selected marked *):"), BorderLayout.NORTH);
 
     table.setSelectionMode(ListSelectionModel.SINGLE_INTERVAL_SELECTION);
     table.setRowHeight(Config.getDotsPerSquare());
@@ -144,23 +154,12 @@ public class FormMenu extends JFrame implements LedgerListener {
     setVisible(true);
   }
 
-  private JPanel getJPanel() {
-    JPanel main = new JPanel();
-    main.setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
-
-    main.setLayout(new BorderLayout());
-
-    JLabel message = new JLabel(
-      "<html>" +
-        "<b>Welcome to budget tool!</b>" +
-        "<br>Use menu to manage buckets,transactions and calculator." +
-        "<br>You can exit by Menu > Exit or clicking on X on top right corner." +
-        "<br><br>Feel free to close child windows, they will retain their state." +
-        "</html>");
-    main.add(message);
-    return main;
-  }
-
+  /**
+   * Listener method called when new Transaction added.
+   * Refresh Accounts and Buckets forms.
+   *
+   * @param id - New Transaction Id
+   */
   @Override
   public void txAdded(long id) {
     logger.info("txAdded --");
@@ -168,6 +167,12 @@ public class FormMenu extends JFrame implements LedgerListener {
     this.refresh();
   }
 
+  /**
+   * Listener method called when new Transaction update.
+   * Refresh Accounts and Buckets forms.
+   *
+   * @param id -  Transaction Id
+   */
   @Override
   public void txUpdate(long id) {
     logger.info("txUpdate --");
@@ -175,6 +180,12 @@ public class FormMenu extends JFrame implements LedgerListener {
     this.refresh();
   }
 
+  /**
+   * Listener method called when new Transaction deleted.
+   * Refresh Accounts and Buckets forms.
+   *
+   * @param id -  Transaction Id
+   */
   @Override
   public void txDelete(long id) {
     logger.info("txDelete --");
@@ -182,6 +193,12 @@ public class FormMenu extends JFrame implements LedgerListener {
     this.refresh();
   }
 
+  /**
+   * Listener method called when new Bucket added.
+   * Refresh Accounts and Transactions forms.
+   *
+   * @param id -  New Bucket Id
+   */
   @Override
   public void bkAdded(int id) {
     logger.info("bkAdded --");
@@ -189,6 +206,12 @@ public class FormMenu extends JFrame implements LedgerListener {
     this.refresh();
   }
 
+  /**
+   * Listener method called when new Bucket updated.
+   * Refresh Accounts and Transactions forms.
+   *
+   * @param id -  Bucket Id
+   */
   @Override
   public void bkUpdate(int id) {
     logger.info("bkUpdate --");
@@ -196,6 +219,12 @@ public class FormMenu extends JFrame implements LedgerListener {
     this.refresh();
   }
 
+  /**
+   * Listener method called when new Bucket deleted.
+   * Refresh Accounts and Transactions forms.
+   *
+   * @param id -  Bucket Id
+   */
   @Override
   public void bkDelete(int id) {
     logger.info("bkDelete --");
@@ -203,6 +232,12 @@ public class FormMenu extends JFrame implements LedgerListener {
     this.refresh();
   }
 
+  /**
+   * Listener method called new Account selected.
+   * Refresh Buckets and Transactions forms.
+   *
+   * @param id -  Account Id
+   */
   @Override
   public void acctSelected(int id) {
     logger.info("acctSelected --");
