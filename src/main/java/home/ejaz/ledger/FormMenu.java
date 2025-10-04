@@ -40,12 +40,12 @@ public class FormMenu extends JFrame implements BucketsListener {
   private void init() {
     if (!init) {
       Registry.setBucketsListener(this);
-      cardTitle.setText("Accounts");
+      cardTitle.setText("> Accounts");
       formAccounts = new FormAccounts(this);
       cardPanel.add(formAccounts, "Accounts");
       miAccounts.addActionListener(al -> {
         formAccounts.init();
-        cardTitle.setText("Accounts");
+        cardTitle.setText("> Accounts");
         cardLayout.show(cardPanel, "Accounts");
       });
 
@@ -53,7 +53,7 @@ public class FormMenu extends JFrame implements BucketsListener {
       cardPanel.add(formBuckets, "Buckets");
       miBuckets.addActionListener(al -> {
         formBuckets.init();
-        cardTitle.setText("Buckets");
+        cardTitle.setText("> Buckets");
         cardLayout.show(cardPanel, "Buckets");
       });
 
@@ -61,7 +61,7 @@ public class FormMenu extends JFrame implements BucketsListener {
       cardPanel.add(formTransactions, "Transactions");
       miTransactions.addActionListener(al -> {
         formTransactions.init();
-        cardTitle.setText("Transactions");
+        cardTitle.setText("> Transactions");
         cardLayout.show(cardPanel, "Transactions");
       });
 
@@ -69,7 +69,7 @@ public class FormMenu extends JFrame implements BucketsListener {
       cardPanel.add(formCalc, "Calculator");
       miCalc.addActionListener(e -> {
         formCalc.init();
-        cardTitle.setText("Calculator");
+        cardTitle.setText("> Calculator");
         cardLayout.show(cardPanel, "Calculator");
       });
 

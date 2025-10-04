@@ -5,6 +5,7 @@ import home.ejaz.ledger.Registry;
 import home.ejaz.ledger.dao.DAOTransaction;
 import home.ejaz.ledger.models.Transaction;
 import home.ejaz.ledger.models.TransactionsTableModel;
+import home.ejaz.ledger.util.TableUtils;
 
 import javax.swing.*;
 import java.awt.*;
@@ -152,12 +153,7 @@ public class FormTransactions extends JPanel {
     refresh();
 
     if (!init) {
-      table.setShowGrid(true);
-      table.setShowHorizontalLines(true);
-      table.setShowVerticalLines(true);
-      table.setGridColor(Color.lightGray);
-      table.getTableHeader().setReorderingAllowed(false);
-      table.setIntercellSpacing(new Dimension(5, 5));
+      TableUtils.formatTable(table);
 
       this.table.getSelectionModel().addListSelectionListener(l -> {
         int row = table.getSelectedRow();
@@ -231,7 +227,6 @@ public class FormTransactions extends JPanel {
 
     JPanel jp2 = new JPanel(new BorderLayout(3,3));
     table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
-    table.setRowHeight(Registry.getDotsPerSquare());
     JScrollPane jsp = new JScrollPane(table);
     jp2.add(jsp, BorderLayout.CENTER);
     jp2.add(jtFilter, BorderLayout.SOUTH);

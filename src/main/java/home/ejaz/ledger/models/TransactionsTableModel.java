@@ -35,7 +35,7 @@ public class TransactionsTableModel extends AbstractTableModel implements Number
     Transaction tx = transactions.get(rowIndex);
     switch (columnIndex) {
       case 0: {
-        return tx.posted;
+        return tx.posted ? "Y" : "N";
       }
       case 1: {
         return tx.id;
@@ -61,7 +61,7 @@ public class TransactionsTableModel extends AbstractTableModel implements Number
   public Class getColumnClass(int columnIndex) {
     switch (columnIndex) {
       case 0:
-        return Boolean.class;
+        return String.class;
       case 1:
         return Long.class;
       case 2:

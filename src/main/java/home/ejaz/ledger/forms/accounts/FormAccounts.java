@@ -4,6 +4,7 @@ import home.ejaz.ledger.Registry;
 import home.ejaz.ledger.dao.DAOAccounts;
 import home.ejaz.ledger.models.*;
 import home.ejaz.ledger.util.CellRenderer;
+import home.ejaz.ledger.util.TableUtils;
 import org.apache.log4j.Logger;
 
 import javax.swing.*;
@@ -59,16 +60,7 @@ public class FormAccounts extends JPanel {
     refresh();
 
     if (!init) {
-      table.setShowGrid(true);
-      table.setShowHorizontalLines(true);
-      table.setShowVerticalLines(true);
-      table.setGridColor(Color.lightGray);
-      table.getTableHeader().setReorderingAllowed(false);
-      table.setIntercellSpacing(new Dimension(5, 5));
-
-      for (int i = 1; i < table.getColumnModel().getColumnCount(); i++) {
-        table.getColumnModel().getColumn(i).setCellRenderer(new CellRenderer());
-      }
+      TableUtils.formatTable(table);
 
       this.table.getColumnModel().getColumn(0).setMinWidth(Registry.getGutterSize());
       this.table.getColumnModel().getColumn(0).setMaxWidth(Registry.getGutterSize());
@@ -99,8 +91,6 @@ public class FormAccounts extends JPanel {
     main.add(btnPanel, BorderLayout.NORTH);
 
     table.setSelectionMode(ListSelectionModel.SINGLE_INTERVAL_SELECTION);
-    table.setRowHeight(Registry.getDotsPerSquare());
-    table.setIntercellSpacing(new Dimension(5, 5));
     table.getColumnModel().getColumn(0).setMinWidth(25);
     table.getColumnModel().getColumn(0).setMaxWidth(25);
     table.getColumnModel().getColumn(0).setPreferredWidth(25);

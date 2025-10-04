@@ -7,6 +7,7 @@ import home.ejaz.ledger.models.Bucket;
 import home.ejaz.ledger.models.BucketsTableModel;
 import home.ejaz.ledger.models.Transaction;
 import home.ejaz.ledger.util.CellRenderer;
+import home.ejaz.ledger.util.TableUtils;
 import org.apache.log4j.Logger;
 
 import javax.swing.*;
@@ -147,19 +148,7 @@ public class FormBuckets extends JPanel {
     refresh();
 
     if (!init) {
-      table.setShowGrid(true);
-      table.setShowHorizontalLines(true);
-      table.setShowVerticalLines(true);
-      table.setGridColor(Color.lightGray);
-      table.getTableHeader().setReorderingAllowed(false);
-      table.setIntercellSpacing(new Dimension(5, 5));
-
-      for (int i = 1; i < table.getColumnModel().getColumnCount(); i++) {
-        table.getColumnModel().getColumn(i).setCellRenderer(new CellRenderer());
-      }
-
-      this.table.getColumnModel().getColumn(0).setMinWidth(Registry.getGutterSize());
-      this.table.getColumnModel().getColumn(0).setMaxWidth(Registry.getGutterSize());
+      TableUtils.formatTable(table);
 
       this.table.getSelectionModel().addListSelectionListener(l -> {
         int row = table.getSelectedRow();
@@ -204,15 +193,13 @@ public class FormBuckets extends JPanel {
   }
 
   public FormBuckets(JFrame parent) {
-    // super(parent);
-
     this.parent = parent;
 
     init();
 
     JPanel main = new JPanel();
     main.setLayout(new BorderLayout());
-    int gap = Registry.getGap();
+    // int gap = Registry.getGap();
     // main.setBorder(BorderFactory.createEmptyBorder(gap, gap, gap, gap));
 
     JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
@@ -223,7 +210,6 @@ public class FormBuckets extends JPanel {
     main.add(btnPanel, BorderLayout.NORTH);
 
     table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
-    table.setRowHeight(Registry.getDotsPerSquare());
     JScrollPane jsp = new JScrollPane(table);
     main.add(jsp, BorderLayout.CENTER);
 

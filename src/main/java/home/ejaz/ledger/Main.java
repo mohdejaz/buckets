@@ -63,8 +63,6 @@ public class Main extends JFrame {
   }
 
   public static void main(String[] args) throws Exception {
-    System.out.println("Inside main --");
-
     try {
       UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
     } catch (ClassNotFoundException | InstantiationException | IllegalAccessException |

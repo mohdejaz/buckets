@@ -13,7 +13,6 @@ public class DbUtils {
   public static Connection getConnection() {
     try {
       Class.forName("org.h2.Driver");
-      logger.info("url = " + Registry.getDBUrl());
       return DriverManager.getConnection(Registry.getDBUrl(), Registry.getDBUser(), Registry.getDBPass());
     } catch (SQLException | ClassNotFoundException e) {
       e.printStackTrace(System.err);
