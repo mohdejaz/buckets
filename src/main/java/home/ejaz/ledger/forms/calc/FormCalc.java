@@ -54,8 +54,8 @@ public class FormCalc extends JPanel {
 
     JPanel main = new JPanel();
     int gap = Config.getGap();
-    main.setLayout(new BorderLayout(gap, gap));
-    main.setBorder(BorderFactory.createEmptyBorder(gap, gap, gap, gap));
+    // main.setLayout(new BorderLayout(gap, gap));
+    // main.setBorder(BorderFactory.createEmptyBorder(gap, gap, gap, gap));
 
     main.add(result, BorderLayout.NORTH);
     main.add(new JScrollPane(expr), BorderLayout.CENTER);

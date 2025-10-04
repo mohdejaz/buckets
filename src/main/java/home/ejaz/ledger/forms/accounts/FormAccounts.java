@@ -75,8 +75,9 @@ public class FormAccounts extends JPanel {
       table.setShowGrid(true);
       table.setShowHorizontalLines(true);
       table.setShowVerticalLines(true);
+      table.setGridColor(Color.lightGray);
       table.getTableHeader().setReorderingAllowed(false);
-      // table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+      table.setIntercellSpacing(new Dimension(5, 5));
 
       for (int i = 1; i < table.getColumnModel().getColumnCount(); i++) {
         table.getColumnModel().getColumn(i).setCellRenderer(new CellRenderer());
@@ -101,8 +102,8 @@ public class FormAccounts extends JPanel {
     init();
 
     JPanel main = new JPanel();
-    main.setBorder(BorderFactory.createEmptyBorder(7, 7, 7, 7));
-    main.setLayout(new BorderLayout(3, 3));
+    // main.setBorder(BorderFactory.createEmptyBorder(7, 7, 7, 7));
+    main.setLayout(new BorderLayout());
     main.add(new JLabel("Your Accounts (selected marked *):"), BorderLayout.SOUTH);
 
     FlowLayout fl = new FlowLayout(FlowLayout.CENTER);
@@ -113,7 +114,9 @@ public class FormAccounts extends JPanel {
     table.setSelectionMode(ListSelectionModel.SINGLE_INTERVAL_SELECTION);
     table.setRowHeight(Config.getDotsPerSquare());
     table.setIntercellSpacing(new Dimension(5, 5));
-    table.getColumnModel().getColumn(0).setMaxWidth(20);
+    table.getColumnModel().getColumn(0).setMinWidth(25);
+    table.getColumnModel().getColumn(0).setMaxWidth(25);
+    table.getColumnModel().getColumn(0).setPreferredWidth(25);
     table.getColumnModel().getColumn(1).setMaxWidth(50);
     JScrollPane jsp = new JScrollPane(table);
     main.add(jsp, BorderLayout.CENTER);

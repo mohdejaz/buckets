@@ -30,6 +30,7 @@ public class FormMenu extends JFrame implements BucketsListener {
   private JMenuItem miExit = new JMenuItem("Exit");
   private final CardLayout cardLayout = new CardLayout();
   private final JPanel cardPanel = new JPanel(cardLayout);
+  private final JLabel cardTitle = new JLabel("Title ...");
   private FormBuckets formBuckets;
   private FormTransactions formTransactions;
   private FormCalc formCalc;
@@ -39,12 +40,12 @@ public class FormMenu extends JFrame implements BucketsListener {
   private void init() {
     if (!init) {
       Config.setBucketsListener(this);
-
+      cardTitle.setText("Accounts");
       formAccounts = new FormAccounts(this);
       cardPanel.add(formAccounts, "Accounts");
       miAccounts.addActionListener(al -> {
         formAccounts.init();
-        // formBuckets.setVisible(true);
+        cardTitle.setText("Accounts");
         cardLayout.show(cardPanel, "Accounts");
       });
 
@@ -52,7 +53,7 @@ public class FormMenu extends JFrame implements BucketsListener {
       cardPanel.add(formBuckets, "Buckets");
       miBuckets.addActionListener(al -> {
         formBuckets.init();
-        // formBuckets.setVisible(true);
+        cardTitle.setText("Buckets");
         cardLayout.show(cardPanel, "Buckets");
       });
 
@@ -60,7 +61,7 @@ public class FormMenu extends JFrame implements BucketsListener {
       cardPanel.add(formTransactions, "Transactions");
       miTransactions.addActionListener(al -> {
         formTransactions.init();
-        // formTransactions.setVisible(true);
+        cardTitle.setText("Transactions");
         cardLayout.show(cardPanel, "Transactions");
       });
 
@@ -68,7 +69,7 @@ public class FormMenu extends JFrame implements BucketsListener {
       cardPanel.add(formCalc, "Calculator");
       miCalc.addActionListener(e -> {
         formCalc.init();
-        // formCalc.setVisible(true);
+        cardTitle.setText("Calculator");
         cardLayout.show(cardPanel, "Calculator");
       });
 
@@ -103,16 +104,23 @@ public class FormMenu extends JFrame implements BucketsListener {
 
     mb.add(mMenu);
 
-    getContentPane().setLayout(new BorderLayout());
-    getContentPane().add(cardPanel, BorderLayout.CENTER);
+    JPanel main = new JPanel();
+    main.setLayout(new BorderLayout(3,3));
+    cardTitle.setBackground(Color.DARK_GRAY);
+    cardTitle.setForeground(Color.WHITE);
+    cardTitle.setOpaque(true);
+    cardTitle.setBorder(BorderFactory.createEmptyBorder(3,3,3,3));
+    main.add(cardTitle, BorderLayout.NORTH);
+    main.add(cardPanel, BorderLayout.CENTER);
+    main.setBorder(BorderFactory.createEmptyBorder(7,7,7,7));
 
+    getContentPane().add(main);
     setJMenuBar(mb);
 
     setTitle(Config.getTitle());
     setDefaultCloseOperation(EXIT_ON_CLOSE);
-    setAlwaysOnTop(true);
     setSize(800, 600);
-    // pack();
+    setLocationRelativeTo(null);
     setVisible(true);
   }
 

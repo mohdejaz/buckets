@@ -223,9 +223,8 @@ public class FormTransactions extends JPanel {
     JPanel main = new JPanel();
     main.setLayout(new BorderLayout());
     int gap = Config.getGap();
-    main.setBorder(BorderFactory.createEmptyBorder(gap, gap, gap, gap));
+    // main.setBorder(BorderFactory.createEmptyBorder(gap, gap, gap, gap));
 
-    JPanel jp1 = new JPanel(new GridLayout(2, 1));
     JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, gap, gap));
     btnPanel.add(jbNew);
     btnPanel.add(jbEdit);
@@ -234,14 +233,15 @@ public class FormTransactions extends JPanel {
     btnPanel.add(jbUnPost);
     btnPanel.add(jbRefresh);
     btnPanel.add(jbExport);
-    jp1.add(btnPanel);
-    jp1.add(jtFilter);
-    main.add(jp1, BorderLayout.NORTH);
+    main.add(btnPanel, BorderLayout.NORTH);
 
+    JPanel jp2 = new JPanel(new BorderLayout(3,3));
     table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
     table.setRowHeight(Config.getDotsPerSquare());
     JScrollPane jsp = new JScrollPane(table);
-    main.add(jsp, BorderLayout.CENTER);
+    jp2.add(jsp, BorderLayout.CENTER);
+    jp2.add(jtFilter, BorderLayout.SOUTH);
+    main.add(jp2, BorderLayout.CENTER);
 
     main.add(lbStatus, BorderLayout.SOUTH);
 

@@ -6,7 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class BucketsTableModel extends AbstractTableModel implements NumberModel {
-  private String[] colNames = new String[]{"", "Id", "Name", "Budget", "Ref.MTD", "Ref.X", "Balance"};
+  private String[] colNames = new String[]{"", "ID", "NAME", "BUDGET", "REFILL(MTD)", "REFILL(F)", "BALANCE"};
   private List<Bucket> buckets = new ArrayList<>();
 
   @Override

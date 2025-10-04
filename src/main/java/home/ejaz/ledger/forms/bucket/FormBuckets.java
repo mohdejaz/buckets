@@ -152,8 +152,9 @@ public class FormBuckets extends JPanel {
       table.setShowGrid(true);
       table.setShowHorizontalLines(true);
       table.setShowVerticalLines(true);
+      table.setGridColor(Color.lightGray);
       table.getTableHeader().setReorderingAllowed(false);
-      // table.setAutoResizeMode(JTable.AUTO_RESIZE_OFF);
+      table.setIntercellSpacing(new Dimension(5, 5));
 
       for (int i = 1; i < table.getColumnModel().getColumnCount(); i++) {
         table.getColumnModel().getColumn(i).setCellRenderer(new CellRenderer());
@@ -214,7 +215,7 @@ public class FormBuckets extends JPanel {
     JPanel main = new JPanel();
     main.setLayout(new BorderLayout());
     int gap = Config.getGap();
-    main.setBorder(BorderFactory.createEmptyBorder(gap, gap, gap, gap));
+    // main.setBorder(BorderFactory.createEmptyBorder(gap, gap, gap, gap));
 
     JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
     btnPanel.add(jbNew);
@@ -222,9 +223,6 @@ public class FormBuckets extends JPanel {
     btnPanel.add(jbRefill);
     btnPanel.add(jbReset);
     main.add(btnPanel, BorderLayout.NORTH);
-
-//    jbRefill.setEnabled(Config.enableRefill());
-//    jbReset.setEnabled(Config.enableReset());
 
     table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
     table.setRowHeight(Config.getDotsPerSquare());

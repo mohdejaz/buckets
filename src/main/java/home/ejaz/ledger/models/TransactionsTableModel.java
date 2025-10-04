@@ -5,14 +5,15 @@ import org.apache.log4j.Logger;
 import javax.swing.event.TableModelEvent;
 import javax.swing.table.AbstractTableModel;
 import java.math.BigDecimal;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
 public class TransactionsTableModel extends AbstractTableModel implements NumberModel {
-  public String[] colNames = new String[]{"Posted", "Id", "TxDate", "Bucket", "Amount", "Note"};
+  public String[] colNames = new String[]{"POSTED", "ID", "TX_DATE", "BUCKET", "AMOUNT", "NOTE"};
   private List<Transaction> transactions = new ArrayList<>();
-  private Logger logger = Logger.getLogger(TransactionsTableModel.class);
+  private SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
 
   @Override
   public int getRowCount() {
@@ -40,7 +41,7 @@ public class TransactionsTableModel extends AbstractTableModel implements Number
         return tx.id;
       }
       case 2: {
-        return tx.txDate;
+        return tx.txDate != null ? sdf.format(tx.txDate) : "N/A";
       }
       case 3: {
         return tx.bucket;
@@ -64,7 +65,7 @@ public class TransactionsTableModel extends AbstractTableModel implements Number
       case 1:
         return Long.class;
       case 2:
-        return Date.class;
+        return String.class;
       case 3:
         return String.class;
       case 4:
