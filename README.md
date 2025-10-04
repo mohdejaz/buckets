@@ -31,4 +31,5 @@ It has buttons for multiple options. You can do following -
 1. This project uses JDatePicker available at https://github.com/JDatePicker/JDatePicker
 2. To run app use run.bat
 3. Initial setup: Create buckets with name and budget. Refill factor is 0.5, so it means you can refill twice a month.
+4. Use app.ddl to create tables & add 1 user and 1 account. User id should be 1.
 
