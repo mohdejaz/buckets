@@ -69,14 +69,19 @@ public class DAOTransaction {
         }
       } else {
         // update
-        try (PreparedStatement ps = conn.prepareStatement("update Transactions set tx_date = ?," +
-          " bucket = (select id from Buckets where name = ?), amount = ?, note = ?" +
-          " where id = ?")) {
+        try (PreparedStatement ps = conn.prepareStatement(
+          "-- update\n" +
+            "update Transactions set tx_date = ?," +
+            " bucket = (select id from Buckets where name = ? and acct_id = ?), " +
+            " amount = ?," +
+            " note = ?" +
+            " where id = ?")) {
           ps.setDate(1, new java.sql.Date(tx.txDate.getTime()));
           ps.setString(2, tx.bucket);
-          ps.setBigDecimal(3, tx.amount);
-          ps.setString(4, tx.note);
-          ps.setLong(5, tx.id);
+          ps.setInt(3, Config.getAcctId());
+          ps.setBigDecimal(4, tx.amount);
+          ps.setString(5, tx.note);
+          ps.setLong(6, tx.id);
           ps.executeUpdate();
         }
       }

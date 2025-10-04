@@ -11,6 +11,7 @@ import org.apache.log4j.Logger;
 import javax.swing.*;
 import java.awt.*;
 import java.util.ArrayList;
+import java.util.function.BiFunction;
 
 public class FormMenu extends JFrame implements LedgerListener {
   private static final Logger logger = Logger.getLogger(FormMenu.class.getName());
@@ -30,18 +31,41 @@ public class FormMenu extends JFrame implements LedgerListener {
   private FormTransactions formTransactions;
   private FormCalc formCalc;
   private boolean init = false;
+  private int lastSelectAcctId = -1;
+
+  BiFunction<Account, Integer, Boolean> selectByRow =
+    (acct, index) -> index == table.getSelectedRow();
+
+  BiFunction<Account, Integer, Boolean> selectById =
+    (acct, index) -> acct.id == Config.getAcctId();
+
+  private void updateSelection(BiFunction<Account, Integer, Boolean> selector) {
+    for (int i = 0; i < accounts.size(); i++) {
+      Account acct = acctsTableModel.getAccount(i);
+      acct.selected = selector.apply(acct, i);
+      if (acct.selected) {
+        lastSelectAcctId = acct.id;
+        Config.setAcctId(acct.id);
+        Config.setTitle(acct.name);
+        this.acctSelected(acct.id);
+      }
+    }
+    acctsTableModel.fireTableDataChanged();
+  }
+
+  private void refresh() {
+    accounts.clear();
+    accounts.addAll(DAOAccounts.getInstance().getAccounts());
+    for (Account acct : accounts) {
+      acct.selected = (acct.id == lastSelectAcctId);
+    }
+    acctsTableModel.setAccounts(accounts);
+    updateSelection(selectById);
+  }
 
   private void init() {
     if (!init) {
-      accounts.clear();
-      accounts.addAll(DAOAccounts.getInstance().getAccounts());
-      if (!accounts.isEmpty()) {
-        acctsTableModel.setAccounts(accounts);
-        accounts.get(0).selected = true;
-        Config.setAcctId(accounts.get(0).id);
-        Config.setTitle(accounts.get(0).name);
-        this.acctSelected(accounts.get(0).id);
-      }
+      refresh();
 
       formBuckets = new FormBuckets(this);
       miBuckets.addActionListener(al -> {
@@ -62,19 +86,8 @@ public class FormMenu extends JFrame implements LedgerListener {
       });
 
       this.select.addActionListener(l -> {
-        int row = table.getSelectedRow();
-        if (row != -1) {
-          logger.info("selected row: " + row);
-          for (int i = 0; i < accounts.size(); i++) {
-            Account acct = acctsTableModel.getAccount(i);
-            acct.selected = i == row;
-            if (acct.selected) {
-              Config.setAcctId(accounts.get(i).id);
-              Config.setTitle(accounts.get(i).name);
-              this.acctSelected(accounts.get(i).id);
-            }
-          }
-          acctsTableModel.fireTableDataChanged();
+        if (table.getSelectedRow() != -1) {
+          updateSelection(selectByRow);
         }
       });
 
@@ -152,36 +165,42 @@ public class FormMenu extends JFrame implements LedgerListener {
   public void txAdded(long id) {
     logger.info("txAdded --");
     this.formBuckets.init();
+    this.refresh();
   }
 
   @Override
   public void txUpdate(long id) {
     logger.info("txUpdate --");
     this.formBuckets.init();
+    this.refresh();
   }
 
   @Override
   public void txDelete(long id) {
     logger.info("txDelete --");
     this.formBuckets.init();
+    this.refresh();
   }
 
   @Override
   public void bkAdded(int id) {
     logger.info("bkAdded --");
     this.formTransactions.init();
+    this.refresh();
   }
 
   @Override
   public void bkUpdate(int id) {
     logger.info("bkUpdate --");
     this.formTransactions.init();
+    this.refresh();
   }
 
   @Override
   public void bkDelete(int id) {
     logger.info("bkDelete --");
     this.formTransactions.init();
+    this.refresh();
   }
 
   @Override
