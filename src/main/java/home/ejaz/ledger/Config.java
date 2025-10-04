@@ -9,6 +9,7 @@ public class Config {
   private static Properties props;
   private static int acctId = -1;
   private static String title = "Buckets";
+  private static BucketsListener bucketsListener;
 
   static {
     try {
@@ -94,5 +95,13 @@ public class Config {
   public static boolean enableReset() {
     System.out.println("enabled.reset: " + getValue("enabled.reset", "true"));
     return Boolean.parseBoolean(getValue("enabled.reset", "true"));
+  }
+
+  public static BucketsListener getBucketsListener() {
+    return bucketsListener;
+  }
+
+  public static void setBucketsListener(BucketsListener value) {
+    bucketsListener = value;
   }
 }

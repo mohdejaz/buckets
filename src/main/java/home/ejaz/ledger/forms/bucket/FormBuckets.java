@@ -1,5 +1,6 @@
 package home.ejaz.ledger.forms.bucket;
 
+import home.ejaz.ledger.BucketsListener;
 import home.ejaz.ledger.Config;
 import home.ejaz.ledger.FormMenu;
 import home.ejaz.ledger.dao.DAOBucket;
@@ -22,7 +23,7 @@ import java.util.Arrays;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-public class FormBuckets extends JDialog {
+public class FormBuckets extends JPanel {
   private static final Logger logger = Logger.getLogger(FormBuckets.class.getName());
 
   private final JButton jbNew = new JButton("New");
@@ -38,7 +39,7 @@ public class FormBuckets extends JDialog {
   private FormBucket formBucket;
   private boolean init = false;
   private int lastSelectBk = -1;
-  private final FormMenu parent;
+  private final JFrame parent;
 
   private void refresh() {
     try {
@@ -65,7 +66,7 @@ public class FormBuckets extends JDialog {
     formBucket.init();
     formBucket.setVisible(true);
     refresh();
-    parent.bkAdded(-1);
+    Config.getBucketsListener().bkAdded(-1);
   }
 
   private void doBuckEdit() {
@@ -88,7 +89,7 @@ public class FormBuckets extends JDialog {
       // Set values
       formBucket.setVisible(true);
       refresh();
-      parent.bkUpdate(-1);
+      Config.getBucketsListener().bkUpdate(-1);
     }
   }
 
@@ -109,7 +110,7 @@ public class FormBuckets extends JDialog {
         daoTransaction.save(tx);
         logger.info("TX Saved --");
         refresh();
-        parent.bkUpdate(bucket.id);
+        Config.getBucketsListener().bkUpdate(bucket.id);
       }
     }
   }
@@ -139,7 +140,7 @@ public class FormBuckets extends JDialog {
         daoTransaction.save(tx);
         logger.info("TX Saved --");
         refresh();
-        parent.bkUpdate(bucket.id);
+        Config.getBucketsListener().bkUpdate(bucket.id);
       }
     }
   }
@@ -178,7 +179,7 @@ public class FormBuckets extends JDialog {
         }
       });
 
-      formBucket = new FormBucket(this);
+      formBucket = new FormBucket(parent);
 
       this.jbNew.addActionListener(al -> doBuckAdd());
       this.jbEdit.addActionListener(al -> doBuckEdit());
@@ -203,8 +204,8 @@ public class FormBuckets extends JDialog {
     }
   }
 
-  public FormBuckets(FormMenu parent) {
-    super(parent);
+  public FormBuckets(JFrame parent) {
+    // super(parent);
 
     this.parent = parent;
 
@@ -222,8 +223,8 @@ public class FormBuckets extends JDialog {
     btnPanel.add(jbReset);
     main.add(btnPanel, BorderLayout.NORTH);
 
-    jbRefill.setEnabled(Config.enableRefill());
-    jbReset.setEnabled(Config.enableReset());
+//    jbRefill.setEnabled(Config.enableRefill());
+//    jbReset.setEnabled(Config.enableReset());
 
     table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
     table.setRowHeight(Config.getDotsPerSquare());
@@ -232,12 +233,7 @@ public class FormBuckets extends JDialog {
 
     main.add(lbStatus, BorderLayout.SOUTH);
 
-    getContentPane().setLayout(new BorderLayout());
-    getContentPane().add(main, BorderLayout.CENTER);
-
-    setTitle("Buckets");
-    setSize(600, 500);
-    setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
-    setLocationRelativeTo(null);
+    setLayout(new BorderLayout());
+    add(main, BorderLayout.CENTER);
   }
 }

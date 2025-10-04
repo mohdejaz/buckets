@@ -1,17 +1,15 @@
 package home.ejaz.ledger;
 
-import home.ejaz.ledger.dao.DAOAccounts;
+import home.ejaz.ledger.forms.accounts.FormAccounts;
 import home.ejaz.ledger.forms.bucket.FormBuckets;
 import home.ejaz.ledger.forms.calc.FormCalc;
 import home.ejaz.ledger.forms.transaction.FormTransactions;
-import home.ejaz.ledger.models.Account;
-import home.ejaz.ledger.models.AccountsTableModel;
 import org.apache.log4j.Logger;
 
 import javax.swing.*;
 import java.awt.*;
-import java.util.ArrayList;
-import java.util.function.BiFunction;
+import java.awt.event.InputEvent;
+import java.awt.event.KeyEvent;
 
 /**
  * Main form with menu & Accounts table.
@@ -20,84 +18,58 @@ import java.util.function.BiFunction;
  * @author Ejaz Mohammed
  * @since 1.0
  */
-public class FormMenu extends JFrame implements LedgerListener {
+public class FormMenu extends JFrame implements BucketsListener {
   private static final Logger logger = Logger.getLogger(FormMenu.class.getName());
 
   private JMenuBar mb = new JMenuBar();
   private JMenu mMenu = new JMenu("Menu");
+  private JMenuItem miAccounts = new JMenuItem("Accounts");
   private JMenuItem miBuckets = new JMenuItem("Buckets");
   private JMenuItem miTransactions = new JMenuItem("Transactions");
   private JMenuItem miCalc = new JMenuItem("Calculator");
   private JMenuItem miExit = new JMenuItem("Exit");
-  private final AccountsTableModel acctsTableModel = new AccountsTableModel();
-  private final JTable table = new JTable(acctsTableModel);
-  private final JButton select = new JButton("Select");
-  private final java.util.List<Account> accounts = new ArrayList<>();
-
+  private final CardLayout cardLayout = new CardLayout();
+  private final JPanel cardPanel = new JPanel(cardLayout);
   private FormBuckets formBuckets;
   private FormTransactions formTransactions;
   private FormCalc formCalc;
+  private FormAccounts formAccounts;
   private boolean init = false;
-  private int lastSelectAcctId = -1;
-
-  BiFunction<Account, Integer, Boolean> selectByRow =
-    (acct, index) -> index == table.getSelectedRow();
-
-  BiFunction<Account, Integer, Boolean> selectById =
-    (acct, index) -> acct.id == Config.getAcctId();
-
-  /* Common Accounts table update */
-  private void updateSelection(BiFunction<Account, Integer, Boolean> selector) {
-    for (int i = 0; i < accounts.size(); i++) {
-      Account acct = acctsTableModel.getAccount(i);
-      acct.selected = selector.apply(acct, i);
-      if (acct.selected) {
-        lastSelectAcctId = acct.id;
-        Config.setAcctId(acct.id);
-        Config.setTitle(acct.name);
-        this.acctSelected(acct.id);
-      }
-    }
-    acctsTableModel.fireTableDataChanged();
-  }
-
-  /* This method is called when bucket/transaction updates */
-  private void refresh() {
-    accounts.clear();
-    accounts.addAll(DAOAccounts.getInstance().getAccounts());
-    for (Account acct : accounts) {
-      acct.selected = (acct.id == lastSelectAcctId);
-    }
-    acctsTableModel.setAccounts(accounts);
-    updateSelection(selectById);
-  }
 
   private void init() {
     if (!init) {
-      refresh();
+      Config.setBucketsListener(this);
+
+      formAccounts = new FormAccounts(this);
+      cardPanel.add(formAccounts, "Accounts");
+      miAccounts.addActionListener(al -> {
+        formAccounts.init();
+        // formBuckets.setVisible(true);
+        cardLayout.show(cardPanel, "Accounts");
+      });
 
       formBuckets = new FormBuckets(this);
+      cardPanel.add(formBuckets, "Buckets");
       miBuckets.addActionListener(al -> {
         formBuckets.init();
-        formBuckets.setVisible(true);
+        // formBuckets.setVisible(true);
+        cardLayout.show(cardPanel, "Buckets");
       });
 
       formTransactions = new FormTransactions(this);
+      cardPanel.add(formTransactions, "Transactions");
       miTransactions.addActionListener(al -> {
         formTransactions.init();
-        formTransactions.setVisible(true);
+        // formTransactions.setVisible(true);
+        cardLayout.show(cardPanel, "Transactions");
       });
 
       formCalc = new FormCalc(this);
+      cardPanel.add(formCalc, "Calculator");
       miCalc.addActionListener(e -> {
         formCalc.init();
-        formCalc.setVisible(true);
-      });
-
-      this.select.addActionListener(l -> {
-        if (table.getSelectedRow() != -1) {
-          updateSelection(selectByRow);
-        }
+        // formCalc.setVisible(true);
+        cardLayout.show(cardPanel, "Calculator");
       });
 
       miExit.addActionListener(al -> System.exit(0));
@@ -111,45 +83,35 @@ public class FormMenu extends JFrame implements LedgerListener {
     init();
 
     mMenu.setMnemonic('M');
+
+    mMenu.add(miAccounts);
+    miAccounts.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_A, InputEvent.ALT_DOWN_MASK));
+
     mMenu.add(miBuckets);
-    miBuckets.setMnemonic('B');
+    miBuckets.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_B, InputEvent.ALT_DOWN_MASK));
+
     mMenu.add(miTransactions);
-    miTransactions.setMnemonic('T');
+    miTransactions.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_T, InputEvent.ALT_DOWN_MASK));
+
     mMenu.add(miCalc);
-    miCalc.setMnemonic('C');
+    miCalc.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_C, InputEvent.ALT_DOWN_MASK));
+
     mMenu.addSeparator();
+
     mMenu.add(miExit);
-    miExit.setMnemonic('x');
+    miExit.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_X, InputEvent.ALT_DOWN_MASK));
 
     mb.add(mMenu);
 
-    JPanel main = new JPanel();
-    main.setBorder(BorderFactory.createEmptyBorder(7,7,7,7));
-    main.setLayout(new BorderLayout(3, 3));
-    main.add(new JLabel("Your Accounts (selected marked *):"), BorderLayout.NORTH);
-
-    table.setSelectionMode(ListSelectionModel.SINGLE_INTERVAL_SELECTION);
-    table.setRowHeight(Config.getDotsPerSquare());
-    table.setIntercellSpacing(new Dimension(5, 5));
-    table.getColumnModel().getColumn(0).setMaxWidth(20);
-    table.getColumnModel().getColumn(1).setMaxWidth(50);
-    JScrollPane jsp = new JScrollPane(table);
-    main.add(jsp, BorderLayout.CENTER);
-
-    FlowLayout fl = new FlowLayout(FlowLayout.TRAILING);
-    JPanel btnPanel = new JPanel(fl);
-    btnPanel.add(this.select);
-    main.add(btnPanel, BorderLayout.SOUTH);
-
     getContentPane().setLayout(new BorderLayout());
-    getContentPane().add(main, BorderLayout.CENTER);
+    getContentPane().add(cardPanel, BorderLayout.CENTER);
 
     setJMenuBar(mb);
 
     setTitle(Config.getTitle());
     setDefaultCloseOperation(EXIT_ON_CLOSE);
     setAlwaysOnTop(true);
-    setSize(500, 300);
+    setSize(800, 600);
     // pack();
     setVisible(true);
   }
@@ -164,7 +126,7 @@ public class FormMenu extends JFrame implements LedgerListener {
   public void txAdded(long id) {
     logger.info("txAdded --");
     this.formBuckets.init();
-    this.refresh();
+    // this.refresh();
   }
 
   /**
@@ -177,7 +139,7 @@ public class FormMenu extends JFrame implements LedgerListener {
   public void txUpdate(long id) {
     logger.info("txUpdate --");
     this.formBuckets.init();
-    this.refresh();
+    // this.refresh();
   }
 
   /**
@@ -190,7 +152,7 @@ public class FormMenu extends JFrame implements LedgerListener {
   public void txDelete(long id) {
     logger.info("txDelete --");
     this.formBuckets.init();
-    this.refresh();
+    // this.refresh();
   }
 
   /**
@@ -203,7 +165,7 @@ public class FormMenu extends JFrame implements LedgerListener {
   public void bkAdded(int id) {
     logger.info("bkAdded --");
     this.formTransactions.init();
-    this.refresh();
+    // this.refresh();
   }
 
   /**
@@ -216,7 +178,7 @@ public class FormMenu extends JFrame implements LedgerListener {
   public void bkUpdate(int id) {
     logger.info("bkUpdate --");
     this.formTransactions.init();
-    this.refresh();
+    // this.refresh();
   }
 
   /**
@@ -229,7 +191,7 @@ public class FormMenu extends JFrame implements LedgerListener {
   public void bkDelete(int id) {
     logger.info("bkDelete --");
     this.formTransactions.init();
-    this.refresh();
+    // this.refresh();
   }
 
   /**

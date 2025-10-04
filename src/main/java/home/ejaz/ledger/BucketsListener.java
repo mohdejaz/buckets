@@ -1,6 +1,6 @@
 package home.ejaz.ledger;
 
-public interface LedgerListener {
+public interface BucketsListener {
 
   void txAdded(long id);
 

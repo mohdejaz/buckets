@@ -1,6 +1,7 @@
 package home.ejaz.ledger.forms.transaction;
 
 import com.opencsv.CSVWriter;
+import home.ejaz.ledger.BucketsListener;
 import home.ejaz.ledger.Config;
 import home.ejaz.ledger.FormMenu;
 import home.ejaz.ledger.dao.DAOTransaction;
@@ -22,7 +23,7 @@ import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.util.ArrayList;
 
-public class FormTransactions extends JDialog {
+public class FormTransactions extends JPanel {
   private static Logger logger = LoggerFactory.getLogger(FormTransactions.class);
 
   private final JButton jbNew = new JButton("New");
@@ -34,14 +35,13 @@ public class FormTransactions extends JDialog {
   private final JButton jbExport = new JButton("Export");
   private final JTextField jtFilter = new JTextField("");
   private final JLabel lbStatus = new JLabel("Status ...");
-
   private final java.util.List<Transaction> list = new ArrayList<>();
   private final TransactionsTableModel txTableModel = new TransactionsTableModel();
   private final JTable table = new JTable(txTableModel);
   private FormTransaction formTransaction;
   private boolean init = false;
   private long lastSelectTx = -1;
-  private final FormMenu parent;
+  private JFrame jframe;
 
   private BigDecimal getBalance() {
     BigDecimal balance = BigDecimal.ZERO;
@@ -81,7 +81,7 @@ public class FormTransactions extends JDialog {
     for (Transaction tx : delTxList) {
       try {
         DAOTransaction.getInstance().delete(tx.id);
-        parent.txDelete(tx.id);
+        Config.getBucketsListener().txDelete(tx.id);
       } catch (SQLException e) {
         e.printStackTrace(System.err);
       }
@@ -94,7 +94,7 @@ public class FormTransactions extends JDialog {
     formTransaction.init();
     formTransaction.setVisible(true);
     refresh();
-    parent.txAdded(-1);
+    Config.getBucketsListener().txAdded(-1);
   }
 
   private void doTxEdit() {
@@ -105,7 +105,7 @@ public class FormTransactions extends JDialog {
       this.lastSelectTx = tx.id;
       formTransaction.setTransaction(tx);
       formTransaction.setVisible(true);
-      parent.txUpdate(-1);
+      Config.getBucketsListener().txUpdate(-1);
     }
     refresh();
   }
@@ -182,7 +182,7 @@ public class FormTransactions extends JDialog {
         }
       });
 
-      formTransaction = new FormTransaction(this);
+      formTransaction = new FormTransaction(jframe);
 
       jbRefresh.addActionListener(al -> refresh());
       jbNew.addActionListener(al -> doTxAdd());
@@ -215,10 +215,8 @@ public class FormTransactions extends JDialog {
     }
   }
 
-  public FormTransactions(FormMenu parent) {
-    super(parent);
-
-    this.parent = parent;
+  public FormTransactions(JFrame jframe) {
+    this.jframe = jframe;
 
     init();
 
@@ -247,12 +245,7 @@ public class FormTransactions extends JDialog {
 
     main.add(lbStatus, BorderLayout.SOUTH);
 
-    getContentPane().setLayout(new BorderLayout());
-    getContentPane().add(main, BorderLayout.CENTER);
-
-    setTitle("Transactions");
-    setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
-    setLocationRelativeTo(null);
-    setSize(800, 600);
+    setLayout(new BorderLayout());
+    add(main, BorderLayout.CENTER);
   }
 }

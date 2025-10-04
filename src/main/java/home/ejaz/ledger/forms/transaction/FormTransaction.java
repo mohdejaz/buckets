@@ -159,8 +159,8 @@ public class FormTransaction extends JDialog {
     jtfNote.setText(tx.note);
   }
 
-  public FormTransaction(JDialog parent) {
-    super(parent);
+  public FormTransaction(JFrame jFrame) {
+    super(jFrame);
 
     init();
 
@@ -215,14 +215,13 @@ public class FormTransaction extends JDialog {
     layout.setConstraints(jbSave, new EConstaint(5, 13, 3, 1));
     main.add(jbSave);
 
-    getContentPane().setLayout(new BorderLayout());
-    getContentPane().add(main, BorderLayout.CENTER);
+    setLayout(new BorderLayout());
+    add(main, BorderLayout.CENTER);
 
-    setTitle("Add/Edit Transaction");
     setResizable(false);
-    setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
-    setLocationRelativeTo(null);
-    pack();
     setModal(true);
+    pack();
+    setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
+    setLocationRelativeTo(jFrame);
   }
 }

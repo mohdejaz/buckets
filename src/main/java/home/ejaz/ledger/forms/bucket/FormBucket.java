@@ -24,6 +24,7 @@ public class FormBucket extends JDialog {
   private final JButton jbClear = new JButton("Clear");
   private final JButton jbSave = new JButton("Save");
   private boolean init = false;
+  private JFrame parent;
 
   public void init() {
     clear();
@@ -99,12 +100,12 @@ public class FormBucket extends JDialog {
     bucket.id = jtfId.getText().isEmpty() ? null : Integer.valueOf(jtfId.getText());
     bucket.name = jtfName.getText().trim().isEmpty() ? null : jtfName.getText().trim();
     bucket.budget = jtfBudget.getText().trim().isEmpty() ? null : new BigDecimal(jtfBudget.getText().trim());
-    bucket.refill = jtfRefFac.getText().trim().isEmpty() ? null: Double.parseDouble(jtfRefFac.getText());
+    bucket.refill = jtfRefFac.getText().trim().isEmpty() ? null : Double.parseDouble(jtfRefFac.getText());
 
     return bucket;
   }
 
-  public FormBucket(JDialog parent) {
+  public FormBucket(JFrame parent) {
     super(parent);
 
     init();
@@ -150,14 +151,13 @@ public class FormBucket extends JDialog {
     layout.setConstraints(jbSave, new EConstaint(5, 8, 3, 1));
     main.add(jbSave);
 
-    getContentPane().setLayout(new BorderLayout());
-    getContentPane().add(main, BorderLayout.CENTER);
+    setLayout(new BorderLayout());
+    add(main, BorderLayout.CENTER);
 
-    setTitle("New/Edit Bucket");
     setResizable(false);
     setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
-    setLocationRelativeTo(null);
-    pack();
     setModal(true);
+    pack();
+    setLocationRelativeTo(parent);
   }
 }

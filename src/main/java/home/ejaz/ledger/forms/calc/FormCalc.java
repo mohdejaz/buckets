@@ -2,6 +2,7 @@ package home.ejaz.ledger.forms.calc;
 
 import com.ezylang.evalex.Expression;
 import com.ezylang.evalex.data.EvaluationValue;
+import home.ejaz.ledger.BucketsListener;
 import home.ejaz.ledger.Config;
 import home.ejaz.ledger.FormMenu;
 import org.apache.log4j.Logger;
@@ -9,7 +10,7 @@ import org.apache.log4j.Logger;
 import javax.swing.*;
 import java.awt.*;
 
-public class FormCalc extends JDialog {
+public class FormCalc extends JPanel {
   private final Logger logger = Logger.getLogger(FormCalc.class);
 
   private final JLabel result = new JLabel("...");
@@ -48,9 +49,7 @@ public class FormCalc extends JDialog {
     }
   }
 
-  public FormCalc(FormMenu parent) {
-    super(parent);
-
+  public FormCalc(BucketsListener parent) {
     init();
 
     JPanel main = new JPanel();
@@ -68,12 +67,14 @@ public class FormCalc extends JDialog {
 
     main.add(btnPanel, BorderLayout.SOUTH);
 
-    getContentPane().setLayout(new BorderLayout());
-    getContentPane().add(main, BorderLayout.CENTER);
+    setLayout(new BorderLayout());
+    add(main, BorderLayout.CENTER);
 
+    /*
     setTitle("Calculator");
     setSize(250, 200);
     setDefaultCloseOperation(JFrame.HIDE_ON_CLOSE);
     setLocationRelativeTo(null);
+     */
   }
 }
