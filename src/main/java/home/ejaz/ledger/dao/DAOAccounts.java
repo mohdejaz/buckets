@@ -1,5 +1,6 @@
 package home.ejaz.ledger.dao;
 
+import home.ejaz.ledger.Registry;
 import home.ejaz.ledger.models.Account;
 import home.ejaz.ledger.util.DbUtils;
 import org.apache.log4j.Logger;
@@ -27,9 +28,10 @@ public class DAOAccounts {
     try (Connection conn = DbUtils.getConnection()) {
       try (PreparedStatement ps = conn.prepareStatement(
         " -- query\n" +
-          " select a.id, a.name, a.user_id, sum(t.amount) balance" +
-          " from Accounts a inner join Buckets b on b.acct_id = a.id" +
-          " inner join Transactions t on t.bucket = b.id" +
+          " select a.id, a.name, a.user_id, nvl(sum(t.amount),0.00) balance" +
+          " from Accounts a " +
+          " left join Buckets b on b.acct_id = a.id" +
+          " left join Transactions t on t.bucket = b.id" +
           " where a.user_id = ?" +
           " group by a.id, a.name, a.user_id")) {
         ps.setInt(1, userId);
@@ -49,5 +51,28 @@ public class DAOAccounts {
     }
 
     return result;
+  }
+
+  public void save(Account account) throws SQLException {
+    try (Connection conn = DbUtils.getConnection()) {
+      if (account.id == null) {
+        // new
+        try (PreparedStatement ps = conn.prepareStatement(
+          "insert into Accounts(name, user_id) values (?,?)")) {
+          ps.setString(1, account.name);
+          ps.setInt(2, account.userId);
+          ps.executeUpdate();
+        }
+      } else {
+        // update
+        try (PreparedStatement ps = conn.prepareStatement(
+          "update Accounts set name = ?, user_id = ? where id = ?")) {
+          ps.setString(1, account.name);
+          ps.setInt(2, account.userId);
+          ps.setInt(3, account.id);
+          ps.executeUpdate();
+        }
+      }
+    }
   }
 }

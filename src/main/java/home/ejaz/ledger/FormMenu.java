@@ -219,4 +219,16 @@ public class FormMenu extends JFrame implements BucketsListener {
       this.formBuckets.init();
     }
   }
+
+  @Override
+  public void acctAdded(int id) {
+  }
+
+  @Override
+  public void acctUpdated(int id) {
+  }
+
+  @Override
+  public void acctDeleted(int id) {
+  }
 }

@@ -29,9 +29,10 @@ public class DAOBucket {
       try (PreparedStatement ps = conn.prepareStatement(
         "SELECT b.id, b.NAME, b.BUDGET," +
           " (select nvl(sum(amount),0.00) from Transactions where tx_date >= date_trunc(month, current_date)" +
-          "  and bucket = b.id and amount >= 0) rtd, " +
+          "  and bucket = b.id and amount >= 0) rtd," +
           " nvl(sum(t.amount),0.00) amt," +
-          " refill " +
+          " refill," +
+          " acct_id " +
           " FROM BUCKETS b LEFT JOIN TRANSACTIONS t ON t.BUCKET = b.ID " +
           " WHERE b.acct_id = ?" +
           " GROUP BY b.id, b.NAME, b.BUDGET")) {
@@ -45,6 +46,7 @@ public class DAOBucket {
             bucket.refillMtd = rs.getBigDecimal("rtd");
             bucket.balance = rs.getBigDecimal("amt");
             bucket.refill = rs.getDouble("refill");
+            bucket.acctId = rs.getInt("acct_id");
             result.add(bucket);
           }
         }
@@ -62,18 +64,19 @@ public class DAOBucket {
           "insert into Buckets(name, budget, acct_id, refill) values (?,?,?,?)")) {
           ps.setString(1, bucket.name);
           ps.setBigDecimal(2, bucket.budget);
-          ps.setInt(3, Registry.getAcctId());
+          ps.setInt(3, bucket.acctId);
           ps.setDouble(4, bucket.refill);
           ps.executeUpdate();
         }
       } else {
         // update
         try (PreparedStatement ps = conn.prepareStatement(
-          "update Buckets set name = ?, budget = ?, refill = ? where id = ?")) {
+          "update Buckets set name = ?, budget = ?, refill = ?, acct_id = ? where id = ?")) {
           ps.setString(1, bucket.name);
           ps.setBigDecimal(2, bucket.budget);
           ps.setDouble(3, bucket.refill);
-          ps.setInt(4, bucket.id);
+          ps.setInt(4, bucket.acctId);
+          ps.setInt(5, bucket.id);
           ps.executeUpdate();
         }
       }

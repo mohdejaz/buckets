@@ -51,7 +51,7 @@ public class FormBuckets extends JPanel {
         balance = balance.add(bucket.balance);
         if (bucket.id == lastSelectBk) {
           this.table.addRowSelectionInterval(row, row);
-          break;
+          // break;
         }
       }
       lbStatus.setText(" Balance: " + balance);

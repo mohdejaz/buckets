@@ -10,6 +10,7 @@ public class Bucket implements Serializable {
   public BigDecimal refillMtd;
   public BigDecimal balance;
   public Double refill;
+  public Integer acctId;
 
   public Bucket() {
   }
