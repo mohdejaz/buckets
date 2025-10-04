@@ -1,7 +1,8 @@
 # Buckets App
 
 This is simple buckets application developed using Java Swing. It uses H2 database to store data.
-It has 4 main entities - 
+
+It has the following entities:
 - Users
 - Accounts: Accounts belong to a User.
 - Buckets: Buckets belong to an Account.
