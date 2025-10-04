@@ -1,6 +1,6 @@
 package home.ejaz.ledger.util;
 
-import home.ejaz.ledger.Config;
+import home.ejaz.ledger.Registry;
 import org.apache.log4j.Logger;
 
 import java.sql.Connection;
@@ -13,8 +13,8 @@ public class DbUtils {
   public static Connection getConnection() {
     try {
       Class.forName("org.h2.Driver");
-      logger.info("url = " + Config.getDBUrl());
-      return DriverManager.getConnection(Config.getDBUrl(), Config.getDBUser(), Config.getDBPass());
+      logger.info("url = " + Registry.getDBUrl());
+      return DriverManager.getConnection(Registry.getDBUrl(), Registry.getDBUser(), Registry.getDBPass());
     } catch (SQLException | ClassNotFoundException e) {
       e.printStackTrace(System.err);
       throw new RuntimeException(e);

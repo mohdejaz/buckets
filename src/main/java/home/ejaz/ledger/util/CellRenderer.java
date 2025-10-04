@@ -1,6 +1,6 @@
 package home.ejaz.ledger.util;
 
-import home.ejaz.ledger.Config;
+import home.ejaz.ledger.Registry;
 import home.ejaz.ledger.models.NumberModel;
 
 import javax.swing.*;
@@ -42,11 +42,11 @@ public class CellRenderer extends DefaultTableCellRenderer {
 
     if (num != null) {
       if (num.doubleValue() < 0.0) {
-        String[] rgb = Config.getNegRGB().split(",");
+        String[] rgb = Registry.getNegRGB().split(",");
         c.setBackground(new Color(parseInt(rgb[0]), parseInt(rgb[1]), parseInt(rgb[2])));
       } else {
         // 66, 245, 209
-        String[] rgb = Config.getPosRGB().split(",");
+        String[] rgb = Registry.getPosRGB().split(",");
         c.setBackground(new Color(parseInt(rgb[0]), parseInt(rgb[1]), parseInt(rgb[2])));
       }
     }

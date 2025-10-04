@@ -1,8 +1,6 @@
 package home.ejaz.ledger.dao;
 
-import home.ejaz.ledger.Config;
 import home.ejaz.ledger.models.Account;
-import home.ejaz.ledger.models.Bucket;
 import home.ejaz.ledger.util.DbUtils;
 import org.apache.log4j.Logger;
 
@@ -14,8 +12,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class DAOAccounts {
-  private static DAOAccounts instance = new DAOAccounts();
-  private Logger logger = Logger.getLogger(DAOAccounts.class);
+  private static final DAOAccounts instance = new DAOAccounts();
 
   public static DAOAccounts getInstance() {
     return instance;
@@ -24,7 +21,7 @@ public class DAOAccounts {
   private DAOAccounts() {
   }
 
-  public List<Account> getAccounts() {
+  public List<Account> getAccounts(int userId) {
     List<Account> result = new ArrayList<>();
 
     try (Connection conn = DbUtils.getConnection()) {
@@ -35,11 +32,9 @@ public class DAOAccounts {
           " inner join Transactions t on t.bucket = b.id" +
           " where a.user_id = ?" +
           " group by a.id, a.name, a.user_id")) {
-        logger.info("User: " + Config.getUserId());
-        ps.setInt(1, Config.getUserId());
+        ps.setInt(1, userId);
         try (ResultSet rs = ps.executeQuery()) {
           while (rs.next()) {
-            logger.info("Inside loop --");
             Account account = new Account();
             account.id = rs.getInt("id");
             account.name = rs.getString("name");

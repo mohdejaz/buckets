@@ -3,8 +3,7 @@ package home.ejaz.ledger.forms.calc;
 import com.ezylang.evalex.Expression;
 import com.ezylang.evalex.data.EvaluationValue;
 import home.ejaz.ledger.BucketsListener;
-import home.ejaz.ledger.Config;
-import home.ejaz.ledger.FormMenu;
+import home.ejaz.ledger.Registry;
 import org.apache.log4j.Logger;
 
 import javax.swing.*;
@@ -53,7 +52,7 @@ public class FormCalc extends JPanel {
     init();
 
     JPanel main = new JPanel();
-    int gap = Config.getGap();
+    int gap = Registry.getGap();
     // main.setLayout(new BorderLayout(gap, gap));
     // main.setBorder(BorderFactory.createEmptyBorder(gap, gap, gap, gap));
 

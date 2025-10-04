@@ -1,6 +1,6 @@
 package home.ejaz.ledger.forms.bucket;
 
-import home.ejaz.ledger.Config;
+import home.ejaz.ledger.Registry;
 import home.ejaz.ledger.dao.DAOBucket;
 import home.ejaz.ledger.layout.EConstaint;
 import home.ejaz.ledger.layout.ELayout;
@@ -112,8 +112,8 @@ public class FormBucket extends JDialog {
 
     JPanel main = new JPanel();
 
-    int gap = Config.getGap();
-    ELayout layout = new ELayout(5, 10, Config.getDotsPerSquare(), gap);
+    int gap = Registry.getGap();
+    ELayout layout = new ELayout(5, 10, Registry.getDotsPerSquare(), gap);
     main.setLayout(layout);
     main.setBorder(BorderFactory.createEmptyBorder(gap, gap, gap, gap));
 

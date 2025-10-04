@@ -1,6 +1,6 @@
 package home.ejaz.ledger.forms.transaction;
 
-import home.ejaz.ledger.Config;
+import home.ejaz.ledger.Registry;
 import home.ejaz.ledger.dao.DAOBucket;
 import home.ejaz.ledger.dao.DAOTransaction;
 import home.ejaz.ledger.layout.EConstaint;
@@ -40,7 +40,7 @@ public class FormTransaction extends JDialog {
   private void refresh() {
     try {
       this.jcBucket.removeAllItems();
-      for (Bucket bucket : DAOBucket.getInstance().getBuckets()) {
+      for (Bucket bucket : DAOBucket.getInstance().getBuckets(Registry.getAcctId())) {
         this.jcBucket.addItem(bucket.name);
       }
     } catch (Exception e) {
@@ -166,8 +166,8 @@ public class FormTransaction extends JDialog {
 
     JPanel main = new JPanel();
 
-    int gap = Config.getGap();
-    ELayout layout = new ELayout(5, 15, Config.getDotsPerSquare(), gap);
+    int gap = Registry.getGap();
+    ELayout layout = new ELayout(5, 15, Registry.getDotsPerSquare(), gap);
     main.setLayout(layout);
     main.setBorder(BorderFactory.createEmptyBorder(gap, gap, gap, gap));
 

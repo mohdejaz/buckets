@@ -1,14 +1,10 @@
 package home.ejaz.ledger.forms.transaction;
 
 import com.opencsv.CSVWriter;
-import home.ejaz.ledger.BucketsListener;
-import home.ejaz.ledger.Config;
-import home.ejaz.ledger.FormMenu;
+import home.ejaz.ledger.Registry;
 import home.ejaz.ledger.dao.DAOTransaction;
 import home.ejaz.ledger.models.Transaction;
 import home.ejaz.ledger.models.TransactionsTableModel;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
 import java.awt.*;
@@ -24,8 +20,6 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 
 public class FormTransactions extends JPanel {
-  private static Logger logger = LoggerFactory.getLogger(FormTransactions.class);
-
   private final JButton jbNew = new JButton("New");
   private final JButton jbEdit = new JButton("Edit");
   private final JButton jbDel = new JButton("Del");
@@ -41,7 +35,7 @@ public class FormTransactions extends JPanel {
   private FormTransaction formTransaction;
   private boolean init = false;
   private long lastSelectTx = -1;
-  private JFrame jframe;
+  private final JFrame jframe;
 
   private BigDecimal getBalance() {
     BigDecimal balance = BigDecimal.ZERO;
@@ -55,7 +49,7 @@ public class FormTransactions extends JPanel {
   private void refresh() {
     try {
       this.list.clear();
-      this.list.addAll(DAOTransaction.getInstance().getTransactions(jtFilter.getText()));
+      this.list.addAll(DAOTransaction.getInstance().getTransactions(Registry.getAcctId(), jtFilter.getText()));
       this.txTableModel.setTransactions(list);
       for (int row = 0; row < this.list.size(); row++) {
         Transaction tx = this.txTableModel.getTransaction(row);
@@ -81,7 +75,7 @@ public class FormTransactions extends JPanel {
     for (Transaction tx : delTxList) {
       try {
         DAOTransaction.getInstance().delete(tx.id);
-        Config.getBucketsListener().txDelete(tx.id);
+        Registry.getBucketsListener().txDelete(tx.id);
       } catch (SQLException e) {
         e.printStackTrace(System.err);
       }
@@ -94,7 +88,7 @@ public class FormTransactions extends JPanel {
     formTransaction.init();
     formTransaction.setVisible(true);
     refresh();
-    Config.getBucketsListener().txAdded(-1);
+    Registry.getBucketsListener().txAdded(-1);
   }
 
   private void doTxEdit() {
@@ -105,7 +99,7 @@ public class FormTransactions extends JPanel {
       this.lastSelectTx = tx.id;
       formTransaction.setTransaction(tx);
       formTransaction.setVisible(true);
-      Config.getBucketsListener().txUpdate(-1);
+      Registry.getBucketsListener().txUpdate(-1);
     }
     refresh();
   }
@@ -222,7 +216,7 @@ public class FormTransactions extends JPanel {
 
     JPanel main = new JPanel();
     main.setLayout(new BorderLayout());
-    int gap = Config.getGap();
+    int gap = Registry.getGap();
     // main.setBorder(BorderFactory.createEmptyBorder(gap, gap, gap, gap));
 
     JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER, gap, gap));
@@ -237,7 +231,7 @@ public class FormTransactions extends JPanel {
 
     JPanel jp2 = new JPanel(new BorderLayout(3,3));
     table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
-    table.setRowHeight(Config.getDotsPerSquare());
+    table.setRowHeight(Registry.getDotsPerSquare());
     JScrollPane jsp = new JScrollPane(table);
     jp2.add(jsp, BorderLayout.CENTER);
     jp2.add(jtFilter, BorderLayout.SOUTH);

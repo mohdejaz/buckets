@@ -1,6 +1,6 @@
 package home.ejaz.ledger.dao;
 
-import home.ejaz.ledger.Config;
+import home.ejaz.ledger.Registry;
 import home.ejaz.ledger.models.Bucket;
 import home.ejaz.ledger.util.DbUtils;
 import org.apache.log4j.Logger;
@@ -13,8 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class DAOBucket {
-  private static DAOBucket instance = new DAOBucket();
-  private Logger logger = Logger.getLogger(DAOBucket.class);
+  private static final DAOBucket instance = new DAOBucket();
 
   public static DAOBucket getInstance() {
     return instance;
@@ -23,10 +22,8 @@ public class DAOBucket {
   private DAOBucket() {
   }
 
-  public java.util.List<Bucket> getBuckets() throws SQLException {
+  public java.util.List<Bucket> getBuckets(int acctId) throws SQLException {
     List<Bucket> result = new ArrayList<>();
-
-    logger.info("acct_id = " + Config.getAcctId());
 
     try (Connection conn = DbUtils.getConnection()) {
       try (PreparedStatement ps = conn.prepareStatement(
@@ -38,7 +35,7 @@ public class DAOBucket {
           " FROM BUCKETS b LEFT JOIN TRANSACTIONS t ON t.BUCKET = b.ID " +
           " WHERE b.acct_id = ?" +
           " GROUP BY b.id, b.NAME, b.BUDGET")) {
-        ps.setInt(1, Config.getAcctId());
+        ps.setInt(1, acctId);
         try (ResultSet rs = ps.executeQuery()) {
           while (rs.next()) {
             Bucket bucket = new Bucket();
@@ -65,7 +62,7 @@ public class DAOBucket {
           "insert into Buckets(name, budget, acct_id, refill) values (?,?,?,?)")) {
           ps.setString(1, bucket.name);
           ps.setBigDecimal(2, bucket.budget);
-          ps.setInt(3, Config.getAcctId());
+          ps.setInt(3, Registry.getAcctId());
           ps.setDouble(4, bucket.refill);
           ps.executeUpdate();
         }

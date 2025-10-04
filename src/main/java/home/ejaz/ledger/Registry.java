@@ -3,8 +3,8 @@ package home.ejaz.ledger;
 import org.apache.log4j.Logger;
 import java.util.Properties;
 
-public class Config {
-  private static final org.apache.log4j.Logger logger = Logger.getLogger(Config.class.getName());
+public class Registry {
+  private static final org.apache.log4j.Logger logger = Logger.getLogger(Registry.class.getName());
   private static String prof = "dev";
   private static Properties props;
   private static int acctId = -1;
@@ -14,10 +14,10 @@ public class Config {
   static {
     try {
       props = new Properties();
-      props.load(Config.class.getResourceAsStream("/config.props"));
+      props.load(Registry.class.getResourceAsStream("/config.props"));
       prof = System.getProperty("profile", "dev") + ".";
     } catch (Exception e) {
-      e.printStackTrace();
+      e.printStackTrace(System.err);
     }
   }
 
@@ -85,16 +85,6 @@ public class Config {
 
   public synchronized static void setTitle(String value) {
     title = value;
-  }
-
-  public static boolean enableRefill() {
-    System.out.println("enabled.refill: " + getValue("enabled.refill", "true"));
-    return Boolean.parseBoolean(getValue("enabled.refill", "true"));
-  }
-
-  public static boolean enableReset() {
-    System.out.println("enabled.reset: " + getValue("enabled.reset", "true"));
-    return Boolean.parseBoolean(getValue("enabled.reset", "true"));
   }
 
   public static BucketsListener getBucketsListener() {

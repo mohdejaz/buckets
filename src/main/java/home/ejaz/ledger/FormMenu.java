@@ -39,7 +39,7 @@ public class FormMenu extends JFrame implements BucketsListener {
 
   private void init() {
     if (!init) {
-      Config.setBucketsListener(this);
+      Registry.setBucketsListener(this);
       cardTitle.setText("Accounts");
       formAccounts = new FormAccounts(this);
       cardPanel.add(formAccounts, "Accounts");
@@ -117,7 +117,7 @@ public class FormMenu extends JFrame implements BucketsListener {
     getContentPane().add(main);
     setJMenuBar(mb);
 
-    setTitle(Config.getTitle());
+    setTitle(Registry.getTitle());
     setDefaultCloseOperation(EXIT_ON_CLOSE);
     setSize(800, 600);
     setLocationRelativeTo(null);
@@ -211,7 +211,7 @@ public class FormMenu extends JFrame implements BucketsListener {
   @Override
   public void acctSelected(int id) {
     logger.info("acctSelected --");
-    setTitle(Config.getTitle());
+    setTitle(Registry.getTitle());
     if (this.formTransactions != null) {
       this.formTransactions.init();
     }

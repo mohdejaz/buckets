@@ -1,8 +1,6 @@
 package home.ejaz.ledger.forms.bucket;
 
-import home.ejaz.ledger.BucketsListener;
-import home.ejaz.ledger.Config;
-import home.ejaz.ledger.FormMenu;
+import home.ejaz.ledger.Registry;
 import home.ejaz.ledger.dao.DAOBucket;
 import home.ejaz.ledger.dao.DAOTransaction;
 import home.ejaz.ledger.models.Bucket;
@@ -44,7 +42,7 @@ public class FormBuckets extends JPanel {
   private void refresh() {
     try {
       this.list.clear();
-      this.list.addAll(DAOBucket.getInstance().getBuckets());
+      this.list.addAll(DAOBucket.getInstance().getBuckets(Registry.getAcctId()));
       this.bucketsTableModel.setBuckets(list);
       BigDecimal balance = BigDecimal.ZERO;
       for (int row = 0; row < this.list.size(); row++) {
@@ -66,7 +64,7 @@ public class FormBuckets extends JPanel {
     formBucket.init();
     formBucket.setVisible(true);
     refresh();
-    Config.getBucketsListener().bkAdded(-1);
+    Registry.getBucketsListener().bkAdded(-1);
   }
 
   private void doBuckEdit() {
@@ -89,7 +87,7 @@ public class FormBuckets extends JPanel {
       // Set values
       formBucket.setVisible(true);
       refresh();
-      Config.getBucketsListener().bkUpdate(-1);
+      Registry.getBucketsListener().bkUpdate(-1);
     }
   }
 
@@ -110,7 +108,7 @@ public class FormBuckets extends JPanel {
         daoTransaction.save(tx);
         logger.info("TX Saved --");
         refresh();
-        Config.getBucketsListener().bkUpdate(bucket.id);
+        Registry.getBucketsListener().bkUpdate(bucket.id);
       }
     }
   }
@@ -140,7 +138,7 @@ public class FormBuckets extends JPanel {
         daoTransaction.save(tx);
         logger.info("TX Saved --");
         refresh();
-        Config.getBucketsListener().bkUpdate(bucket.id);
+        Registry.getBucketsListener().bkUpdate(bucket.id);
       }
     }
   }
@@ -160,8 +158,8 @@ public class FormBuckets extends JPanel {
         table.getColumnModel().getColumn(i).setCellRenderer(new CellRenderer());
       }
 
-      this.table.getColumnModel().getColumn(0).setMinWidth(Config.getGutterSize());
-      this.table.getColumnModel().getColumn(0).setMaxWidth(Config.getGutterSize());
+      this.table.getColumnModel().getColumn(0).setMinWidth(Registry.getGutterSize());
+      this.table.getColumnModel().getColumn(0).setMaxWidth(Registry.getGutterSize());
 
       this.table.getSelectionModel().addListSelectionListener(l -> {
         int row = table.getSelectedRow();
@@ -214,7 +212,7 @@ public class FormBuckets extends JPanel {
 
     JPanel main = new JPanel();
     main.setLayout(new BorderLayout());
-    int gap = Config.getGap();
+    int gap = Registry.getGap();
     // main.setBorder(BorderFactory.createEmptyBorder(gap, gap, gap, gap));
 
     JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
@@ -225,7 +223,7 @@ public class FormBuckets extends JPanel {
     main.add(btnPanel, BorderLayout.NORTH);
 
     table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
-    table.setRowHeight(Config.getDotsPerSquare());
+    table.setRowHeight(Registry.getDotsPerSquare());
     JScrollPane jsp = new JScrollPane(table);
     main.add(jsp, BorderLayout.CENTER);
 

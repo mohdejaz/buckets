@@ -1,6 +1,6 @@
 package home.ejaz.ledger.dao;
 
-import home.ejaz.ledger.Config;
+import home.ejaz.ledger.Registry;
 import home.ejaz.ledger.models.Transaction;
 import home.ejaz.ledger.util.DbUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -13,8 +13,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 
 public class DAOTransaction {
-  private static DAOTransaction instance = new DAOTransaction();
-  private Logger logger = Logger.getLogger(DAOTransaction.class);
+  private static final DAOTransaction instance = new DAOTransaction();
 
   public static DAOTransaction getInstance() {
     return instance;
@@ -23,7 +22,8 @@ public class DAOTransaction {
   private DAOTransaction() {
   }
 
-  public java.util.List<Transaction> getTransactions(String filter) throws SQLException {
+  public java.util.List<Transaction> getTransactions(int acctId, String filter)
+    throws SQLException {
     java.util.List<Transaction> transactions = new ArrayList<>();
 
     try (Connection conn = DbUtils.getConnection()) {
@@ -34,8 +34,7 @@ public class DAOTransaction {
           " WHERE b.acct_id = ? " +
           " ORDER by t.tx_date desc, t.id desc)" +
           " WHERE " + (!StringUtils.isEmpty(filter) ? filter : "1 = 1"))) {
-        logger.info("sel acct: " + Config.getAcctId());
-        ps.setInt(1, Config.getAcctId());
+        ps.setInt(1, acctId);
         try (ResultSet rs = ps.executeQuery()) {
           while (rs.next()) {
             Transaction tx = new Transaction();
@@ -78,7 +77,7 @@ public class DAOTransaction {
             " where id = ?")) {
           ps.setDate(1, new java.sql.Date(tx.txDate.getTime()));
           ps.setString(2, tx.bucket);
-          ps.setInt(3, Config.getAcctId());
+          ps.setInt(3, Registry.getAcctId());
           ps.setBigDecimal(4, tx.amount);
           ps.setString(5, tx.note);
           ps.setLong(6, tx.id);

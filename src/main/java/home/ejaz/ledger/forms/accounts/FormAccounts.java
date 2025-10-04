@@ -1,28 +1,15 @@
 package home.ejaz.ledger.forms.accounts;
 
-import home.ejaz.ledger.BucketsListener;
-import home.ejaz.ledger.Config;
-import home.ejaz.ledger.FormMenu;
+import home.ejaz.ledger.Registry;
 import home.ejaz.ledger.dao.DAOAccounts;
-import home.ejaz.ledger.dao.DAOBucket;
-import home.ejaz.ledger.dao.DAOTransaction;
-import home.ejaz.ledger.forms.bucket.FormBucket;
 import home.ejaz.ledger.models.*;
 import home.ejaz.ledger.util.CellRenderer;
 import org.apache.log4j.Logger;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
-import java.math.BigDecimal;
-import java.sql.SQLException;
-import java.time.LocalDate;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Set;
 import java.util.function.BiFunction;
-import java.util.stream.Collectors;
 
 public class FormAccounts extends JPanel {
   private static final Logger logger = Logger.getLogger(FormAccounts.class.getName());
@@ -39,7 +26,7 @@ public class FormAccounts extends JPanel {
     (acct, index) -> index == table.getSelectedRow();
 
   BiFunction<Account, Integer, Boolean> selectById =
-    (acct, index) -> acct.id == Config.getAcctId();
+    (acct, index) -> acct.id == Registry.getAcctId();
 
 
   /* Common Accounts table update */
@@ -49,9 +36,9 @@ public class FormAccounts extends JPanel {
       acct.selected = selector.apply(acct, i);
       if (acct.selected) {
         lastSelectAcctId = acct.id;
-        Config.setAcctId(acct.id);
-        Config.setTitle(acct.name);
-        Config.getBucketsListener().acctSelected(acct.id);
+        Registry.setAcctId(acct.id);
+        Registry.setTitle(acct.name);
+        Registry.getBucketsListener().acctSelected(acct.id);
       }
     }
     acctsTableModel.fireTableDataChanged();
@@ -60,7 +47,7 @@ public class FormAccounts extends JPanel {
   /* This method is called when bucket/transaction updates */
   private void refresh() {
     accounts.clear();
-    accounts.addAll(DAOAccounts.getInstance().getAccounts());
+    accounts.addAll(DAOAccounts.getInstance().getAccounts(Registry.getUserId()));
     for (Account acct : accounts) {
       acct.selected = (acct.id == lastSelectAcctId);
     }
@@ -83,8 +70,8 @@ public class FormAccounts extends JPanel {
         table.getColumnModel().getColumn(i).setCellRenderer(new CellRenderer());
       }
 
-      this.table.getColumnModel().getColumn(0).setMinWidth(Config.getGutterSize());
-      this.table.getColumnModel().getColumn(0).setMaxWidth(Config.getGutterSize());
+      this.table.getColumnModel().getColumn(0).setMinWidth(Registry.getGutterSize());
+      this.table.getColumnModel().getColumn(0).setMaxWidth(Registry.getGutterSize());
 
       this.select.addActionListener(l -> {
         if (table.getSelectedRow() != -1) {
@@ -112,7 +99,7 @@ public class FormAccounts extends JPanel {
     main.add(btnPanel, BorderLayout.NORTH);
 
     table.setSelectionMode(ListSelectionModel.SINGLE_INTERVAL_SELECTION);
-    table.setRowHeight(Config.getDotsPerSquare());
+    table.setRowHeight(Registry.getDotsPerSquare());
     table.setIntercellSpacing(new Dimension(5, 5));
     table.getColumnModel().getColumn(0).setMinWidth(25);
     table.getColumnModel().getColumn(0).setMaxWidth(25);

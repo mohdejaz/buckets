@@ -72,7 +72,7 @@ public class Main extends JFrame {
       e.printStackTrace(System.err);
     }
 
-    setFont(new FontUIResource(new Font("Verdana", Font.PLAIN, Config.getFontSize())));
+    setFont(new FontUIResource(new Font("Verdana", Font.PLAIN, Registry.getFontSize())));
     new FormMenu();
   }
 }
