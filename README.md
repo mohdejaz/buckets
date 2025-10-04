@@ -1,7 +1,11 @@
-# Home Ledger App
+# Buckets App
 
-This is simple home ledger application developed using Java Swing. It uses H2 database to store data.
-It has 2 main entities - Buckets & Transactions. Buckets have budgets. Use any jdbc client (e.g DBeaver) to view sample schema (ledger.*.db).
+This is simple buckets application developed using Java Swing. It uses H2 database to store data.
+It has 4 main entities - 
+- Users
+- Accounts: Accounts belong to a User.
+- Buckets: Buckets belong to an Account.
+- Transactions: Transactions belong to a Bucket.
 
 ## Screens
 ### Menu
