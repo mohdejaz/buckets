@@ -106,7 +106,7 @@ public class FormMenu extends JFrame implements BucketsListener {
 
     JPanel main = new JPanel();
     main.setLayout(new BorderLayout(3,3));
-    cardTitle.setBackground(Color.DARK_GRAY);
+    cardTitle.setBackground(Color.GRAY);
     cardTitle.setForeground(Color.WHITE);
     cardTitle.setOpaque(true);
     cardTitle.setBorder(BorderFactory.createEmptyBorder(3,3,3,3));
