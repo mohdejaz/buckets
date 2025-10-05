@@ -1,2 +1,2 @@
 @echo off
-java -Dprofile=rel -jar target\ledger.jar
+java -Dprofile=rel -jar release\ledger.jar

@@ -17,6 +17,7 @@
               <goal>shade</goal>
             </goals>
             <configuration>
+              <outputDirectory>${project.basedir}/release</outputDirectory>
               <transformers>
                 <transformer>
                   <mainClass>home.ejaz.ledger.Main</mainClass>
