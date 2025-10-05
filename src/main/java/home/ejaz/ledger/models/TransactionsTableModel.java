@@ -1,13 +1,9 @@
 package home.ejaz.ledger.models;
 
-import org.apache.log4j.Logger;
-
-import javax.swing.event.TableModelEvent;
 import javax.swing.table.AbstractTableModel;
 import java.math.BigDecimal;
 import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Date;
 import java.util.List;
 
 public class TransactionsTableModel extends AbstractTableModel implements NumberModel {
@@ -88,8 +84,8 @@ public class TransactionsTableModel extends AbstractTableModel implements Number
   }
 
   @Override
-  public Number getValue(int row) {
+  public Number2 getValue(int row) {
     Transaction tx = transactions.get(row);
-    return tx == null ? null : tx.amount;
+    return tx == null ? null : new Number2(tx.amount, 4);
   }
 }

@@ -30,15 +30,8 @@ public class FormAccounts extends JPanel {
   private boolean init;
   private int lastTouchedAcctId = -1;
 
-  BiFunction<Account, Integer, Boolean> selectByRow =
-    (acct, index) -> index == table.getSelectedRow();
-
-  BiFunction<Account, Integer, Boolean> selectById =
-    (acct, index) -> acct.id == Registry.getAcctId();
-
-
   /* Common Accounts table update */
-  private void updateSelection(BiFunction<Account, Integer, Boolean> selector) {
+  private void updateSelection() {
     for (int row = 0; row < accounts.size(); row++) {
       Account acct = accounts.get(row);
       logger.info("A/c Id: " + acct.id + " Last selected A/c: " + lastTouchedAcctId);
@@ -56,7 +49,10 @@ public class FormAccounts extends JPanel {
     accounts.clear();
     accounts.addAll(DAOAccounts.getInstance().getAccounts(Registry.getUserId()));
     acctsTableModel.setAccounts(accounts);
-    updateSelection(selectById);
+    if (lastTouchedAcctId == -1) {
+      lastTouchedAcctId = accounts.get(0).id;
+    }
+    updateSelection();
   }
 
   public void init() {

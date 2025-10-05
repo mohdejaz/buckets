@@ -2,5 +2,5 @@ package home.ejaz.ledger.models;
 
 public interface NumberModel {
 
-  Number getValue(int row);
+  Number2 getValue(int row);
 }

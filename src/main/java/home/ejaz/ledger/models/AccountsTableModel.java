@@ -6,8 +6,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class AccountsTableModel extends AbstractTableModel implements NumberModel {
-  private String[] colNames = new String[]{"ID", "NAME", "BALANCE"};
-  private List<Account> accounts = new ArrayList<>();
+  private final String[] colNames = new String[]{"ID", "NAME", "BALANCE"};
+  private final List<Account> accounts = new ArrayList<>();
 
   @Override
   public int getRowCount() {
@@ -55,8 +55,8 @@ public class AccountsTableModel extends AbstractTableModel implements NumberMode
   }
 
   @Override
-  public Number getValue(int row) {
+  public Number2 getValue(int row) {
     Account acct = accounts.get(row);
-    return acct == null ? null : acct.balance;
+    return acct == null ? null : new Number2(acct.balance, 2);
   }
 }

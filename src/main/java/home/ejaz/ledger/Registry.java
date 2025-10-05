@@ -1,6 +1,11 @@
 package home.ejaz.ledger;
 
 import org.apache.log4j.Logger;
+
+import java.io.*;
+import java.net.URL;
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Properties;
 
 public class Registry {
@@ -10,15 +15,32 @@ public class Registry {
   private static int acctId = -1;
   private static String title = "Buckets";
   private static BucketsListener bucketsListener;
+  private static String welcomeMessage = "N/A";
 
   static {
     try {
       props = new Properties();
       props.load(Registry.class.getResourceAsStream("/config.props"));
       prof = System.getProperty("profile", "dev") + ".";
+      try (InputStream inp = Registry.class.getResourceAsStream("/welcome.htm")) {
+        if (inp != null) {
+          try (BufferedReader rdr = new BufferedReader(new InputStreamReader(inp))) {
+            StringBuilder buff = new StringBuilder();
+            String line;
+            while ((line = rdr.readLine()) != null) {
+              buff.append(line);
+            }
+            welcomeMessage = buff.toString();
+          }
+        }
+      }
     } catch (Exception e) {
       e.printStackTrace(System.err);
     }
+  }
+
+  public static String getWelcomeMessage() {
+    return welcomeMessage;
   }
 
   private static String getValue(String name, String defValue) {
@@ -80,7 +102,7 @@ public class Registry {
   }
 
   public synchronized static String getTitle() {
-    return getValue("title","Buckets") + " - " + title;
+    return getValue("title", "Buckets") + " - " + title;
   }
 
   public synchronized static void setTitle(String value) {

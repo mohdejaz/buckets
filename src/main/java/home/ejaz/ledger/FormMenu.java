@@ -10,6 +10,8 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
+import java.io.InputStreamReader;
+import java.io.StringReader;
 
 /**
  * Main form with menu & Accounts table.
@@ -40,7 +42,12 @@ public class FormMenu extends JFrame implements BucketsListener {
   private void init() {
     if (!init) {
       Registry.setBucketsListener(this);
-      cardTitle.setText("> Accounts");
+
+      cardTitle.setText("> Welcome");
+      JLabel lb = new JLabel(Registry.getWelcomeMessage());
+      lb.setVerticalAlignment(JLabel.TOP);
+      cardPanel.add(lb, "Welcome");
+
       formAccounts = new FormAccounts(this);
       cardPanel.add(formAccounts, "Accounts");
       miAccounts.addActionListener(al -> {
