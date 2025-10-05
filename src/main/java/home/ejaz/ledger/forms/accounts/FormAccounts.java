@@ -54,7 +54,7 @@ public class FormAccounts extends JPanel {
     accounts.clear();
     accounts.addAll(DAOAccounts.getInstance().getAccounts(Registry.getUserId()));
     acctsTableModel.setAccounts(accounts);
-    if (lastTouchedAcctId == -1) {
+    if (lastTouchedAcctId == -1 && !accounts.isEmpty()) {
       lastTouchedAcctId = accounts.get(0).id;
     }
     updateSelection();
