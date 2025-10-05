@@ -8,6 +8,8 @@ import org.apache.log4j.Logger;
 
 import javax.swing.*;
 import java.awt.*;
+import java.awt.event.MouseAdapter;
+import java.awt.event.MouseEvent;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Set;
@@ -37,24 +39,16 @@ public class FormAccounts extends JPanel {
 
   /* Common Accounts table update */
   private void updateSelection(BiFunction<Account, Integer, Boolean> selector) {
-    int srow = -1;
     for (int row = 0; row < accounts.size(); row++) {
       Account acct = accounts.get(row);
       logger.info("A/c Id: " + acct.id + " Last selected A/c: " + lastTouchedAcctId);
       if (acct.id == lastTouchedAcctId) {
-        logger.info("Add row selection --");
-        srow = row;
-      }
-      acct.selected = selector.apply(acct, row);
-      if (acct.selected) {
+        this.table.addRowSelectionInterval(row, row);
         Registry.setAcctId(acct.id);
         Registry.setTitle(acct.name);
         Registry.getBucketsListener().acctSelected(acct.id);
       }
     }
-    acctsTableModel.fireTableDataChanged();
-    if (srow != -1)
-      this.table.addRowSelectionInterval(srow, srow);
   }
 
   /* This method is called when bucket/transaction updates */
@@ -71,24 +65,23 @@ public class FormAccounts extends JPanel {
     if (!init) {
       TableUtils.formatTable(table);
 
-      this.table.getColumnModel().getColumn(0).setMinWidth(Registry.getGutterSize());
-      this.table.getColumnModel().getColumn(0).setMaxWidth(Registry.getGutterSize());
+      this.table.getSelectionModel().addListSelectionListener(l -> {
+        int row = table.getSelectedRow();
+        if (row != -1) {
+          Account acct = acctsTableModel.getAccount(row);
+          this.lastTouchedAcctId = acct.id;
+          Registry.setAcctId(acct.id);
+          Registry.setTitle(acct.name);
+          Registry.getBucketsListener().acctSelected(acct.id);
+        }
+      });
 
       formAccount = new FormAccount(parent);
 
-      this.select.addActionListener(l -> doSelect());
       this.jbNew.addActionListener(al -> doAcctAdd());
       this.jbEdit.addActionListener(al -> doAcctEdit());
 
       init = true;
-    }
-  }
-
-  private void doSelect() {
-    if (table.getSelectedRow() != -1) {
-      lastTouchedAcctId = accounts.get(table.getSelectedRow()).id;
-      logger.info("Selected A/c: " + lastTouchedAcctId);
-      updateSelection(selectByRow);
     }
   }
 
@@ -141,10 +134,8 @@ public class FormAccounts extends JPanel {
     main.add(btnPanel, BorderLayout.NORTH);
 
     table.setSelectionMode(ListSelectionModel.SINGLE_INTERVAL_SELECTION);
-    table.getColumnModel().getColumn(0).setMinWidth(25);
-    table.getColumnModel().getColumn(0).setMaxWidth(25);
-    table.getColumnModel().getColumn(0).setPreferredWidth(25);
-    table.getColumnModel().getColumn(1).setMaxWidth(50);
+    table.getColumnModel().getColumn(0).setMinWidth(50);
+    table.getColumnModel().getColumn(0).setMaxWidth(50);
     JScrollPane jsp = new JScrollPane(table);
     main.add(jsp, BorderLayout.CENTER);
 

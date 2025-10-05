@@ -6,7 +6,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class AccountsTableModel extends AbstractTableModel implements NumberModel {
-  private String[] colNames = new String[]{"...", "ID", "NAME", "BALANCE"};
+  private String[] colNames = new String[]{"ID", "NAME", "BALANCE"};
   private List<Account> accounts = new ArrayList<>();
 
   @Override
@@ -28,10 +28,9 @@ public class AccountsTableModel extends AbstractTableModel implements NumberMode
   public Object getValueAt(int rowIndex, int columnIndex) {
     Account account = accounts.get(rowIndex);
     return switch (columnIndex) {
-      case 0 -> account.selected ? "*" : "";
-      case 1 -> account.id;
-      case 2 -> account.name;
-      case 3 -> account.balance;
+      case 0 -> account.id;
+      case 1 -> account.name;
+      case 2 -> account.balance;
       default -> null;
     };
   }
@@ -39,8 +38,8 @@ public class AccountsTableModel extends AbstractTableModel implements NumberMode
   @Override
   public Class getColumnClass(int columnIndex) {
     return switch (columnIndex) {
-      case 1 -> Integer.class;
-      case 3 -> BigDecimal.class;
+      case 0 -> Integer.class;
+      case 2 -> BigDecimal.class;
       default -> String.class;
     };
   }
