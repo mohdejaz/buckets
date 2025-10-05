@@ -10,6 +10,8 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.math.BigDecimal;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Set;
@@ -24,6 +26,7 @@ public class FormAccounts extends JPanel {
   private final JButton select = new JButton("Select");
   private final JButton jbNew = new JButton("New");
   private final JButton jbEdit = new JButton("Edit");
+  private final JLabel jlbStatus = new JLabel(" Balance: ");
   private final java.util.List<Account> accounts = new ArrayList<>();
   private FormAccount formAccount;
   private final JFrame parent;
@@ -32,9 +35,10 @@ public class FormAccounts extends JPanel {
 
   /* Common Accounts table update */
   private void updateSelection() {
+    BigDecimal balance = BigDecimal.ZERO;
     for (int row = 0; row < accounts.size(); row++) {
       Account acct = accounts.get(row);
-      logger.info("A/c Id: " + acct.id + " Last selected A/c: " + lastTouchedAcctId);
+      balance = balance.add(acct.balance);
       if (acct.id == lastTouchedAcctId) {
         this.table.addRowSelectionInterval(row, row);
         Registry.setAcctId(acct.id);
@@ -42,6 +46,7 @@ public class FormAccounts extends JPanel {
         Registry.getBucketsListener().acctSelected(acct.id);
       }
     }
+    jlbStatus.setText(" Balance: " + new DecimalFormat("###,###,###.00").format(balance));
   }
 
   /* This method is called when bucket/transaction updates */
@@ -120,7 +125,7 @@ public class FormAccounts extends JPanel {
     JPanel main = new JPanel();
     // main.setBorder(BorderFactory.createEmptyBorder(7, 7, 7, 7));
     main.setLayout(new BorderLayout());
-    main.add(new JLabel("Your Accounts (selected marked *):"), BorderLayout.SOUTH);
+    main.add(jlbStatus, BorderLayout.SOUTH);
 
     FlowLayout fl = new FlowLayout(FlowLayout.CENTER);
     JPanel btnPanel = new JPanel(fl);

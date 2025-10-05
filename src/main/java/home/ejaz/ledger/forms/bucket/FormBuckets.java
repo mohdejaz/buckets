@@ -16,6 +16,7 @@ import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
 import java.math.BigDecimal;
 import java.sql.SQLException;
+import java.text.DecimalFormat;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -54,7 +55,7 @@ public class FormBuckets extends JPanel {
           // break;
         }
       }
-      lbStatus.setText(" Balance: " + balance);
+      lbStatus.setText(" Balance: " + new DecimalFormat("###,###,###.00").format(balance));
     } catch (Exception e) {
       logger.warn("Error", e);
       System.exit(1);

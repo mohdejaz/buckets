@@ -18,6 +18,7 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.sql.SQLException;
+import java.text.DecimalFormat;
 import java.util.ArrayList;
 
 public class FormTransactions extends JPanel {
@@ -38,28 +39,20 @@ public class FormTransactions extends JPanel {
   private long lastSelectTx = -1;
   private final JFrame jframe;
 
-  private BigDecimal getBalance() {
-    BigDecimal balance = BigDecimal.ZERO;
-    for (int i = 0; i < txTableModel.getRowCount(); i++) {
-      Transaction tx = txTableModel.getTransaction(i);
-      balance = balance.add(tx.amount);
-    }
-    return balance;
-  }
-
   private void refresh() {
     try {
       this.list.clear();
       this.list.addAll(DAOTransaction.getInstance().getTransactions(Registry.getAcctId(), jtFilter.getText()));
       this.txTableModel.setTransactions(list);
+      BigDecimal balance = BigDecimal.ZERO;
       for (int row = 0; row < this.list.size(); row++) {
         Transaction tx = this.txTableModel.getTransaction(row);
+        balance = balance.add(tx.amount);
         if (tx.id == lastSelectTx) {
           this.table.addRowSelectionInterval(row, row);
-          break;
         }
       }
-      lbStatus.setText(" Balance: " + getBalance());
+      lbStatus.setText(" Balance: " + new DecimalFormat("###,###,###.00").format(balance));
     } catch (Exception e) {
       e.printStackTrace(System.err);
       System.exit(1);
