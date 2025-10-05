@@ -8,6 +8,12 @@ It has the following entities:
 - Buckets: Buckets belong to an Account.
 - Transactions: Transactions belong to a Bucket.
 
+System Requirements:
+1. JDK 17+
+2. Maven 3.9.0 or higher
+3. Run "maven clean compile install" to build jar
+4. run.bat
+
 ## Screens
 ### Menu
 ![MENU](./imgs/menu.png)
