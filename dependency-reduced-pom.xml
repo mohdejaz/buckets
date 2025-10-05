@@ -17,7 +17,6 @@
               <goal>shade</goal>
             </goals>
             <configuration>
-              <outputDirectory>${project.basedir}/release</outputDirectory>
               <transformers>
                 <transformer>
                   <mainClass>home.ejaz.ledger.Main</mainClass>
@@ -33,6 +32,30 @@
                   </excludes>
                 </filter>
               </filters>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <artifactId>maven-resources-plugin</artifactId>
+        <version>3.3.1</version>
+        <executions>
+          <execution>
+            <id>copy-shaded-jar</id>
+            <phase>install</phase>
+            <goals>
+              <goal>copy-resources</goal>
+            </goals>
+            <configuration>
+              <outputDirectory>${project.basedir}/release</outputDirectory>
+              <resources>
+                <resource>
+                  <directory>${project.build.directory}</directory>
+                  <includes>
+                    <include>ledger.jar</include>
+                  </includes>
+                </resource>
+              </resources>
             </configuration>
           </execution>
         </executions>
