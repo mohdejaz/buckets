@@ -84,8 +84,10 @@ public class TransactionsTableModel extends AbstractTableModel implements Number
   }
 
   @Override
-  public Number2 getValue(int row) {
-    Transaction tx = transactions.get(row);
-    return tx == null ? null : new Number2(tx.amount, 4);
+  public boolean formatNumber(int col) {
+    return switch (col) {
+      case 4 -> true;
+      default -> false;
+    };
   }
 }

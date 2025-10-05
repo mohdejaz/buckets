@@ -11,7 +11,7 @@ public class TableUtils {
     table.setShowGrid(false);
     table.setShowHorizontalLines(true);
     table.setShowVerticalLines(true);
-    table.setGridColor(Color.gray);
+    table.setGridColor(Color.lightGray);
     table.getTableHeader().setReorderingAllowed(false);
     table.setRowHeight(Registry.getDotsPerSquare());
 

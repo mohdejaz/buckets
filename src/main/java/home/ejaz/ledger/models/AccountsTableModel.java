@@ -55,8 +55,10 @@ public class AccountsTableModel extends AbstractTableModel implements NumberMode
   }
 
   @Override
-  public Number2 getValue(int row) {
-    Account acct = accounts.get(row);
-    return acct == null ? null : new Number2(acct.balance, 2);
+  public boolean formatNumber(int col) {
+    return switch (col) {
+      case 2 -> true;
+      default -> false;
+    };
   }
 }

@@ -82,8 +82,12 @@ public class BucketsTableModel extends AbstractTableModel implements NumberModel
   }
 
   @Override
-  public Number2 getValue(int row) {
-    Bucket bucket = buckets.get(row);
-    return bucket == null ? null : new Number2(bucket.balance, 5);
+  public boolean formatNumber(int col) {
+    return switch (col) {
+      case 2 -> true;
+      case 3 -> true;
+      case 5 -> true;
+      default -> false;
+    };
   }
 }
