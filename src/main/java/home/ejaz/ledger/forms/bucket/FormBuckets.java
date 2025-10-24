@@ -7,6 +7,7 @@ import home.ejaz.ledger.models.Bucket;
 import home.ejaz.ledger.models.BucketsTableModel;
 import home.ejaz.ledger.models.Transaction;
 import home.ejaz.ledger.util.CellRenderer;
+import home.ejaz.ledger.util.DateUtils;
 import home.ejaz.ledger.util.TableUtils;
 import org.apache.log4j.Logger;
 
@@ -18,205 +19,207 @@ import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.text.DecimalFormat;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public class FormBuckets extends JPanel {
-  private static final Logger logger = Logger.getLogger(FormBuckets.class.getName());
+    private static final Logger logger = Logger.getLogger(FormBuckets.class.getName());
 
-  private final JButton jbNew = new JButton("New");
-  private final JButton jbEdit = new JButton("Edit");
-  private final JButton jbRefill = new JButton("Refill");
-  private final JButton jbReset = new JButton("Reset");
+    private final JButton jbNew = new JButton("New");
+    private final JButton jbEdit = new JButton("Edit");
+    private final JButton jbRefill = new JButton("Refill");
+    private final JButton jbReset = new JButton("Reset");
 
-  private final BucketsTableModel bucketsTableModel = new BucketsTableModel();
-  private final JTable table = new JTable(bucketsTableModel);
-  private final JLabel lbStatus = new JLabel("Status ...");
+    private final BucketsTableModel bucketsTableModel = new BucketsTableModel();
+    private final JTable table = new JTable(bucketsTableModel);
+    private final JLabel lbStatus = new JLabel("Status ...");
 
-  private final java.util.List<Bucket> list = new ArrayList<>();
-  private FormBucket formBucket;
-  private boolean init = false;
-  private int lastSelectBk = -1;
-  private final JFrame parent;
+    private final java.util.List<Bucket> list = new ArrayList<>();
+    private FormBucket formBucket;
+    private boolean init = false;
+    private int lastSelectBk = -1;
+    private final JFrame parent;
 
-  private void refresh() {
-    try {
-      this.list.clear();
-      this.list.addAll(DAOBucket.getInstance().getBuckets(Registry.getAcctId()));
-      this.bucketsTableModel.setBuckets(list);
-      BigDecimal balance = BigDecimal.ZERO;
-      for (int row = 0; row < this.list.size(); row++) {
-        Bucket bucket = this.list.get(row);
-        balance = balance.add(bucket.balance);
-        if (bucket.id == lastSelectBk) {
-          this.table.addRowSelectionInterval(row, row);
-          // break;
+    private void refresh() {
+        try {
+            this.list.clear();
+            this.list.addAll(DAOBucket.getInstance().getBuckets(Registry.getAcctId()));
+            this.bucketsTableModel.setBuckets(list);
+            BigDecimal balance = BigDecimal.ZERO;
+            for (int row = 0; row < this.list.size(); row++) {
+                Bucket bucket = this.list.get(row);
+                balance = balance.add(bucket.balance);
+                if (bucket.id == lastSelectBk) {
+                    this.table.addRowSelectionInterval(row, row);
+                    // break;
+                }
+            }
+            lbStatus.setText(" Balance: " + new DecimalFormat("###,###,###.00").format(balance));
+        } catch (Exception e) {
+            logger.warn("Error", e);
+            System.exit(1);
         }
-      }
-      lbStatus.setText(" Balance: " + new DecimalFormat("###,###,###.00").format(balance));
-    } catch (Exception e) {
-      logger.warn("Error", e);
-      System.exit(1);
-    }
-  }
-
-  private void doBuckAdd() {
-    formBucket.init();
-    formBucket.setVisible(true);
-    refresh();
-    Registry.getBucketsListener().bkAdded(-1);
-  }
-
-  private void doBuckEdit() {
-    Set<Integer> selectedRows = Arrays.stream(this.table.getSelectedRows()).boxed().collect(Collectors.toSet());
-    if (selectedRows.size() != 1) {
-      JOptionPane.showMessageDialog(
-        this, // Parent component (can be null for a default Frame)
-        "Zero/1+ rows selected for refill. Please try again.", // The message to display
-        "Error", // The title of the dialog box
-        JOptionPane.ERROR_MESSAGE // The message type, which determines the icon and style
-      );
     }
 
-    int row = table.getSelectedRow();
-    if (row != -1) {
-      formBucket.init();
-      Bucket bucket = bucketsTableModel.getBucket(row);
-      this.lastSelectBk = bucket.id;
-      formBucket.setBucket(bucket);
-      // Set values
-      formBucket.setVisible(true);
-      refresh();
-      Registry.getBucketsListener().bkUpdate(-1);
-    }
-  }
-
-  public void doBuckReset() throws SQLException {
-    refresh();
-
-    DAOTransaction daoTransaction = DAOTransaction.getInstance();
-    LocalDate dt = LocalDate.now();
-    for (int i = 0; i < bucketsTableModel.getRowCount(); i++) {
-      Bucket bucket = bucketsTableModel.getBucket(i);
-      if (bucket.balance.doubleValue() > 0) {
-        logger.info("Resetting " + bucket.name + " --");
-        Transaction tx = new Transaction();
-        tx.bucket = bucket.name;
-        tx.amount = bucket.balance.multiply(BigDecimal.valueOf(-1.0));
-        tx.txDate = java.sql.Date.valueOf(dt);
-        tx.note = "Reset";
-        daoTransaction.save(tx);
-        logger.info("TX Saved --");
+    private void doBuckAdd() {
+        formBucket.init();
+        formBucket.setVisible(true);
         refresh();
-        Registry.getBucketsListener().bkUpdate(bucket.id);
-      }
+        Registry.getBucketsListener().bkAdded(-1);
     }
-  }
 
-  public void doBuckRefill() throws SQLException {
-    DAOTransaction daoTransaction = DAOTransaction.getInstance();
-    LocalDate dt = LocalDate.now();
-    Set<Integer> selectedRows = Arrays.stream(this.table.getSelectedRows()).boxed().collect(Collectors.toSet());
-    if (selectedRows.isEmpty()) {
-      JOptionPane.showMessageDialog(
-        this, // Parent component (can be null for a default Frame)
-        "No rows selected for refill. Please try again.", // The message to display
-        "Error", // The title of the dialog box
-        JOptionPane.ERROR_MESSAGE // The message type, which determines the icon and style
-      );
-    }
-    for (int i = 0; i < bucketsTableModel.getRowCount(); i++) {
-      if (selectedRows.contains(i)) {
-        Bucket bucket = bucketsTableModel.getBucket(i);
-        logger.info("Refilling " + bucket.name + " --");
-        Transaction tx = new Transaction();
-        tx.bucket = bucket.name;
-        tx.amount = bucket.budget.multiply(BigDecimal.valueOf(bucket.refill));
-        tx.note = "Refill";
-        tx.txDate = java.sql.Date.valueOf(
-          (dt.getDayOfMonth() < 15) ? dt.withDayOfMonth(1) : dt.withDayOfMonth(15));
-        daoTransaction.save(tx);
-        logger.info("TX Saved --");
-        refresh();
-        Registry.getBucketsListener().bkUpdate(bucket.id);
-      }
-    }
-  }
+    private void doBuckEdit() {
+        Set<Integer> selectedRows = Arrays.stream(this.table.getSelectedRows()).boxed().collect(Collectors.toSet());
+        if (selectedRows.size() != 1) {
+            JOptionPane.showMessageDialog(
+                    this, // Parent component (can be null for a default Frame)
+                    "Zero/1+ rows selected for refill. Please try again.", // The message to display
+                    "Error", // The title of the dialog box
+                    JOptionPane.ERROR_MESSAGE // The message type, which determines the icon and style
+            );
+        }
 
-  public void init() {
-    refresh();
-
-    if (!init) {
-      TableUtils.formatTable(table);
-
-      this.table.getSelectionModel().addListSelectionListener(l -> {
         int row = table.getSelectedRow();
         if (row != -1) {
-          Bucket bucket = bucketsTableModel.getBucket(row);
-          this.lastSelectBk = bucket.id;
+            formBucket.init();
+            Bucket bucket = bucketsTableModel.getBucket(row);
+            this.lastSelectBk = bucket.id;
+            formBucket.setBucket(bucket);
+            // Set values
+            formBucket.setVisible(true);
+            refresh();
+            Registry.getBucketsListener().bkUpdate(-1);
         }
-      });
-
-      this.table.addMouseListener(new MouseAdapter() {
-        @Override
-        public void mouseClicked(MouseEvent e) {
-          if (e.getClickCount() >= 2) {
-            doBuckEdit();
-          }
-        }
-      });
-
-      formBucket = new FormBucket(parent);
-
-      this.jbNew.addActionListener(al -> doBuckAdd());
-      this.jbEdit.addActionListener(al -> doBuckEdit());
-      this.jbRefill.addActionListener(al -> {
-        try {
-          doBuckRefill();
-        } catch (SQLException e) {
-          logger.warn("Error", e);
-          throw new RuntimeException(e);
-        }
-      });
-      this.jbReset.addActionListener(al -> {
-        try {
-          doBuckReset();
-        } catch (SQLException e) {
-          logger.warn("Error", e);
-          throw new RuntimeException(e);
-        }
-      });
-
-      init = true;
     }
-  }
 
-  public FormBuckets(JFrame parent) {
-    this.parent = parent;
+    public void doBuckReset() throws SQLException {
+        refresh();
 
-    init();
+        DAOTransaction daoTransaction = DAOTransaction.getInstance();
+        LocalDate dt = LocalDate.now();
+        for (int i = 0; i < bucketsTableModel.getRowCount(); i++) {
+            Bucket bucket = bucketsTableModel.getBucket(i);
+            if (bucket.balance.doubleValue() > 0) {
+                logger.info("Resetting " + bucket.name + " --");
+                Transaction tx = new Transaction();
+                tx.bucket = bucket.name;
+                tx.amount = bucket.balance.multiply(BigDecimal.valueOf(-1.0));
+                tx.txDate = java.sql.Date.valueOf(dt);
+                tx.note = "Reset";
+                daoTransaction.save(tx);
+                logger.info("TX Saved --");
+                refresh();
+                Registry.getBucketsListener().bkUpdate(bucket.id);
+            }
+        }
+    }
 
-    JPanel main = new JPanel();
-    main.setLayout(new BorderLayout());
-    // int gap = Registry.getGap();
-    // main.setBorder(BorderFactory.createEmptyBorder(gap, gap, gap, gap));
+    public void doBuckRefill() throws SQLException {
+        DAOBucket daoBucket = DAOBucket.getInstance();
+        DAOTransaction daoTransaction = DAOTransaction.getInstance();
+        LocalDate dt = LocalDate.now();
+        Set<Integer> selectedRows = Arrays.stream(this.table.getSelectedRows()).boxed().collect(Collectors.toSet());
+        if (selectedRows.isEmpty()) {
+            JOptionPane.showMessageDialog(
+                    this, // Parent component (can be null for a default Frame)
+                    "No rows selected for refill. Please try again.", // The message to display
+                    "Error", // The title of the dialog box
+                    JOptionPane.ERROR_MESSAGE // The message type, which determines the icon and style
+            );
+        }
+        for (int i = 0; i < bucketsTableModel.getRowCount(); i++) {
+            if (selectedRows.contains(i)) {
+                Bucket bucket = bucketsTableModel.getBucket(i);
+                if (bucket.nextRefill != null && bucket.nextRefill.after(new Date())) {
+                    logger.info("Refilling " + bucket.name + " --");
+                    Transaction tx = new Transaction();
+                    tx.bucket = bucket.name;
+                    tx.amount = bucket.budget;
+                    tx.note = "Refill";
+                    tx.txDate = new java.sql.Date(new Date().getTime());
+                    bucket.nextRefill = DateUtils.getNextRun(bucket.refillSchedule,  bucket.nextRefill);
+                    daoBucket.save(bucket);
+                    daoTransaction.save(tx);
+                    logger.info("TX Saved --");
+                    refresh();
+                    Registry.getBucketsListener().bkUpdate(bucket.id);
+                }
+            }
+        }
+    }
 
-    JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
-    btnPanel.add(jbNew);
-    btnPanel.add(jbEdit);
-    btnPanel.add(jbRefill);
-    btnPanel.add(jbReset);
-    main.add(btnPanel, BorderLayout.NORTH);
+    public void init() {
+        refresh();
 
-    table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
-    JScrollPane jsp = new JScrollPane(table);
-    main.add(jsp, BorderLayout.CENTER);
+        if (!init) {
+            TableUtils.formatTable(table);
 
-    main.add(lbStatus, BorderLayout.SOUTH);
+            this.table.getSelectionModel().addListSelectionListener(l -> {
+                int row = table.getSelectedRow();
+                if (row != -1) {
+                    Bucket bucket = bucketsTableModel.getBucket(row);
+                    this.lastSelectBk = bucket.id;
+                }
+            });
 
-    setLayout(new BorderLayout());
-    add(main, BorderLayout.CENTER);
-  }
+            this.table.addMouseListener(new MouseAdapter() {
+                @Override
+                public void mouseClicked(MouseEvent e) {
+                    if (e.getClickCount() >= 2) {
+                        doBuckEdit();
+                    }
+                }
+            });
+
+            formBucket = new FormBucket(parent);
+
+            this.jbNew.addActionListener(al -> doBuckAdd());
+            this.jbEdit.addActionListener(al -> doBuckEdit());
+            this.jbRefill.addActionListener(al -> {
+                try {
+                    doBuckRefill();
+                } catch (SQLException e) {
+                    logger.warn("Error", e);
+                    throw new RuntimeException(e);
+                }
+            });
+            this.jbReset.addActionListener(al -> {
+                try {
+                    doBuckReset();
+                } catch (SQLException e) {
+                    logger.warn("Error", e);
+                    throw new RuntimeException(e);
+                }
+            });
+
+            init = true;
+        }
+    }
+
+    public FormBuckets(JFrame parent) {
+        this.parent = parent;
+
+        init();
+
+        JPanel main = new JPanel();
+        main.setLayout(new BorderLayout());
+        // int gap = Registry.getGap();
+        // main.setBorder(BorderFactory.createEmptyBorder(gap, gap, gap, gap));
+
+        JPanel btnPanel = new JPanel(new FlowLayout(FlowLayout.CENTER));
+        btnPanel.add(jbNew);
+        btnPanel.add(jbEdit);
+        btnPanel.add(jbRefill);
+        btnPanel.add(jbReset);
+        main.add(btnPanel, BorderLayout.NORTH);
+
+        table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);
+        JScrollPane jsp = new JScrollPane(table);
+        main.add(jsp, BorderLayout.CENTER);
+
+        main.add(lbStatus, BorderLayout.SOUTH);
+
+        setLayout(new BorderLayout());
+        add(main, BorderLayout.CENTER);
+    }
 }

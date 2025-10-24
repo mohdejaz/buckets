@@ -2,6 +2,7 @@ package home.ejaz.ledger.models;
 
 import java.io.Serializable;
 import java.math.BigDecimal;
+import java.util.Date;
 
 public class Bucket implements Serializable {
   public Integer id;
@@ -9,7 +10,8 @@ public class Bucket implements Serializable {
   public BigDecimal budget;
   public BigDecimal refillMtd;
   public BigDecimal balance;
-  public Double refill;
+  public String refillSchedule;
+  public Date nextRefill;
   public Integer acctId;
 
   public Bucket() {
