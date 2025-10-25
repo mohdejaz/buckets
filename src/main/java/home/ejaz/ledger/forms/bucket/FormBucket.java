@@ -40,6 +40,7 @@ public class FormBucket extends JDialog {
     private final JTextField jtfBudget = new JTextField();
     private final JTextField jtfRefillSchd = new JTextField();
     private final DatePicker picker = new JDatePicker(new UtilDateModel());
+    private final JTextField jtfRefillFactor = new JTextField();
 
     private final JButton jbClear = new JButton("Clear");
     private final JButton jbSave = new JButton("Save");
@@ -110,6 +111,7 @@ public class FormBucket extends JDialog {
         jtfId.setText("");
         jtfName.setText("");
         jtfBudget.setText("");
+        jtfRefillFactor.setText("");
     }
 
     public void setBucket(Bucket bucket) {
@@ -117,10 +119,13 @@ public class FormBucket extends JDialog {
         jtfName.setText(bucket.name == null ? "" : bucket.name);
         jtfBudget.setText(bucket.budget == null ? "" : bucket.budget.toString());
         jtfRefillSchd.setText(bucket.refillSchedule == null ? "" : bucket.refillSchedule);
-        Calendar cal = Calendar.getInstance();
-        cal.setTime(bucket.nextRefill);
-        picker.getModel().setDate(cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH));
-        picker.getModel().setSelected(true);
+        jtfRefillFactor.setText("" + bucket.refillFactor);
+        if (bucket.nextRefill != null) {
+            Calendar cal = Calendar.getInstance();
+            cal.setTime(bucket.nextRefill);
+            picker.getModel().setDate(cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH));
+            picker.getModel().setSelected(true);
+        }
     }
 
     public Bucket getBucket() {
@@ -131,6 +136,7 @@ public class FormBucket extends JDialog {
         bucket.refillSchedule = jtfRefillSchd.getText().trim().isEmpty() ? null : jtfRefillSchd.getText();
         bucket.nextRefill = getDateFromPicker();
         bucket.acctId = Registry.getAcctId();
+        bucket.refillFactor = Double.parseDouble(jtfRefillFactor.getText());
 
         return bucket;
     }
@@ -150,7 +156,7 @@ public class FormBucket extends JDialog {
         JPanel main = new JPanel();
 
         int gap = Registry.getGap();
-        ELayout layout = new ELayout(6, 10, Registry.getDotsPerSquare(), gap);
+        ELayout layout = new ELayout(7, 10, Registry.getDotsPerSquare(), gap);
         main.setLayout(layout);
         main.setBorder(BorderFactory.createEmptyBorder(gap, gap, gap, gap));
 
@@ -175,9 +181,9 @@ public class FormBucket extends JDialog {
         layout.setConstraints(jtfBudget, new EConstaint(3, 4, 3, 1));
         main.add(jtfBudget);
 
-        JLabel jlbRefFactor = new JLabel("Ref Schedule:");
-        layout.setConstraints(jlbRefFactor, new EConstaint(4, 1, 3, 1));
-        main.add(jlbRefFactor);
+        JLabel jlbRefSchd = new JLabel("Ref Schedule:");
+        layout.setConstraints(jlbRefSchd, new EConstaint(4, 1, 3, 1));
+        main.add(jlbRefSchd);
 
         layout.setConstraints(jtfRefillSchd, new EConstaint(4, 4, 3, 1));
         main.add(jtfRefillSchd);
@@ -192,10 +198,17 @@ public class FormBucket extends JDialog {
         layout.setConstraints((JComponent) picker, new EConstaint(5, 4, 6, 1));
         main.add((JComponent) picker);
 
-        layout.setConstraints(jbClear, new EConstaint(6, 5, 3, 1));
+        JLabel jlbRefFactor = new JLabel("Refill Factor:");
+        layout.setConstraints(jlbRefFactor, new EConstaint(6, 1, 3, 1));
+        main.add(jlbRefFactor);
+
+        layout.setConstraints(jtfRefillFactor, new EConstaint(6, 4, 3, 1));
+        main.add(jtfRefillFactor);
+
+        layout.setConstraints(jbClear, new EConstaint(7, 5, 3, 1));
         main.add(jbClear);
 
-        layout.setConstraints(jbSave, new EConstaint(6, 8, 3, 1));
+        layout.setConstraints(jbSave, new EConstaint(7, 8, 3, 1));
         main.add(jbSave);
 
         setLayout(new BorderLayout());

@@ -11,6 +11,7 @@ import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 public class DAOBucket {
     private static final DAOBucket instance = new DAOBucket();
@@ -20,6 +21,11 @@ public class DAOBucket {
     }
 
     private DAOBucket() {
+    }
+
+    public Bucket getBucket(int acctId, String bname) throws SQLException {
+        Optional<Bucket> bucket = getBuckets(acctId).stream().filter(buck -> buck.name.equals(bname)).findFirst();
+        return bucket.orElse(null);
     }
 
     public java.util.List<Bucket> getBuckets(int acctId) throws SQLException {
@@ -33,7 +39,8 @@ public class DAOBucket {
                             " nvl(sum(t.amount),0.00) amt," +
                             " refill_schd," +
                             " next_refill," +
-                            " acct_id " +
+                            " acct_id," +
+                            " refill_factor " +
                             " FROM BUCKETS b LEFT JOIN TRANSACTIONS t ON t.BUCKET = b.ID " +
                             " WHERE b.acct_id = ?" +
                             " GROUP BY b.id, b.NAME, b.BUDGET")) {
@@ -48,6 +55,7 @@ public class DAOBucket {
                         bucket.balance = rs.getBigDecimal("amt");
                         bucket.refillSchedule = rs.getString("refill_schd");
                         bucket.nextRefill = rs.getDate("next_refill") != null ? new java.util.Date(rs.getDate("next_refill").getTime()) : null;
+                        bucket.refillFactor = rs.getDouble("refill_factor");
                         bucket.acctId = rs.getInt("acct_id");
                         result.add(bucket);
                     }
@@ -72,13 +80,15 @@ public class DAOBucket {
             } else {
                 // update
                 try (PreparedStatement ps = conn.prepareStatement(
-                        "update Buckets set name = ?, budget = ?, acct_id = ?, refill_schd = ?, next_refill = ? where id = ?")) {
+                        "update Buckets set name = ?, budget = ?, acct_id = ?, refill_schd = ?, next_refill = ?," +
+                                " refill_factor = ? where id = ?")) {
                     ps.setString(1, bucket.name);
                     ps.setBigDecimal(2, bucket.budget);
                     ps.setInt(3, bucket.acctId);
                     ps.setString(4, bucket.refillSchedule);
                     ps.setDate(5, new java.sql.Date(bucket.nextRefill.getTime()));
-                    ps.setInt(6, bucket.id);
+                    ps.setDouble(6, bucket.refillFactor);
+                    ps.setInt(7, bucket.id);
                     ps.executeUpdate();
                 }
             }

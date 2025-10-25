@@ -29,6 +29,7 @@ public class FormBuckets extends JPanel {
     private final JButton jbEdit = new JButton("Edit");
     private final JButton jbRefill = new JButton("Refill");
     private final JButton jbReset = new JButton("Reset");
+    private final JButton jbTransfer = new JButton("Transfer");
 
     private final BucketsTableModel bucketsTableModel = new BucketsTableModel();
     private final JTable table = new JTable(bucketsTableModel);
@@ -36,6 +37,7 @@ public class FormBuckets extends JPanel {
 
     private final java.util.List<Bucket> list = new ArrayList<>();
     private FormBucket formBucket;
+    private FormBucketTransfer formBucketTransfer;
     private boolean init = false;
     private int lastSelectBk = -1;
     private final JFrame parent;
@@ -66,6 +68,12 @@ public class FormBuckets extends JPanel {
         formBucket.setVisible(true);
         refresh();
         Registry.getBucketsListener().bkAdded(-1);
+    }
+
+    private void doBuckTransfer() {
+        formBucketTransfer.init();
+        formBucketTransfer.setVisible(true);
+        refresh();
     }
 
     private void doBuckEdit() {
@@ -133,7 +141,7 @@ public class FormBuckets extends JPanel {
                     logger.info("Refilling " + bucket.name + " --");
                     Transaction tx = new Transaction();
                     tx.bucket = bucket.name;
-                    tx.amount = bucket.budget;
+                    tx.amount = bucket.budget.multiply(new BigDecimal(bucket.refillFactor));
                     tx.note = "Refill";
                     tx.txDate = new Date();
                     bucket.nextRefill = DateUtils.getNextRun(bucket.refillSchedule, bucket.nextRefill);
@@ -174,6 +182,7 @@ public class FormBuckets extends JPanel {
             });
 
             formBucket = new FormBucket(parent);
+            formBucketTransfer = new FormBucketTransfer(parent);
 
             this.jbNew.addActionListener(al -> doBuckAdd());
             this.jbEdit.addActionListener(al -> doBuckEdit());
@@ -192,6 +201,9 @@ public class FormBuckets extends JPanel {
                     logger.warn("Error", e);
                     throw new RuntimeException(e);
                 }
+            });
+            this.jbTransfer.addActionListener(al -> {
+                doBuckTransfer();
             });
 
             init = true;
@@ -213,6 +225,7 @@ public class FormBuckets extends JPanel {
         btnPanel.add(jbEdit);
         btnPanel.add(jbRefill);
         btnPanel.add(jbReset);
+        btnPanel.add(jbTransfer);
         main.add(btnPanel, BorderLayout.NORTH);
 
         table.setSelectionMode(ListSelectionModel.MULTIPLE_INTERVAL_SELECTION);

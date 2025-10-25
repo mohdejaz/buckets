@@ -7,9 +7,9 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class TransactionsTableModel extends AbstractTableModel implements NumberModel {
-  public String[] colNames = new String[]{"POSTED", "ID", "TX_DATE", "BUCKET", "AMOUNT", "NOTE"};
-  private List<Transaction> transactions = new ArrayList<>();
-  private SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
+  public String[] colNames = new String[]{"Posted", "Id", "Tx_Date", "Bucket", "Amount", "Note"};
+  private final List<Transaction> transactions = new ArrayList<>();
+  private final SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
 
   @Override
   public int getRowCount() {

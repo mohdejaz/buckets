@@ -12,6 +12,7 @@ public class Bucket implements Serializable {
   public BigDecimal balance;
   public String refillSchedule;
   public Date nextRefill;
+  public double refillFactor;
   public Integer acctId;
 
   public Bucket() {
