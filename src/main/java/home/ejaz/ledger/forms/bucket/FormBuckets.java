@@ -117,7 +117,6 @@ public class FormBuckets extends JPanel {
     public void doBuckRefill() throws SQLException {
         DAOBucket daoBucket = DAOBucket.getInstance();
         DAOTransaction daoTransaction = DAOTransaction.getInstance();
-        LocalDate dt = LocalDate.now();
         Set<Integer> selectedRows = Arrays.stream(this.table.getSelectedRows()).boxed().collect(Collectors.toSet());
         if (selectedRows.isEmpty()) {
             JOptionPane.showMessageDialog(
@@ -130,14 +129,17 @@ public class FormBuckets extends JPanel {
         for (int i = 0; i < bucketsTableModel.getRowCount(); i++) {
             if (selectedRows.contains(i)) {
                 Bucket bucket = bucketsTableModel.getBucket(i);
-                if (bucket.nextRefill != null && bucket.nextRefill.after(new Date())) {
+                if (bucket.nextRefill == null || bucket.nextRefill.before(new Date())) {
                     logger.info("Refilling " + bucket.name + " --");
                     Transaction tx = new Transaction();
                     tx.bucket = bucket.name;
                     tx.amount = bucket.budget;
                     tx.note = "Refill";
-                    tx.txDate = new java.sql.Date(new Date().getTime());
-                    bucket.nextRefill = DateUtils.getNextRun(bucket.refillSchedule,  bucket.nextRefill);
+                    tx.txDate = new Date();
+                    bucket.nextRefill = DateUtils.getNextRun(bucket.refillSchedule, bucket.nextRefill);
+                    if (bucket.nextRefill == null) {
+                        throw new RuntimeException("bucket.nextRefill is null!");
+                    }
                     daoBucket.save(bucket);
                     daoTransaction.save(tx);
                     logger.info("TX Saved --");

@@ -12,6 +12,9 @@ import home.ejaz.ledger.layout.EConstaint;
 import home.ejaz.ledger.layout.ELayout;
 import home.ejaz.ledger.models.Bucket;
 import org.apache.log4j.Logger;
+import org.jdatepicker.DatePicker;
+import org.jdatepicker.JDatePicker;
+import org.jdatepicker.UtilDateModel;
 
 import javax.swing.*;
 import java.awt.*;
@@ -22,6 +25,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
+import java.util.Calendar;
 import java.util.Date;
 import java.util.Objects;
 import java.util.Optional;
@@ -35,6 +39,8 @@ public class FormBucket extends JDialog {
     private final JTextField jtfName = new JTextField();
     private final JTextField jtfBudget = new JTextField();
     private final JTextField jtfRefillSchd = new JTextField();
+    private final DatePicker picker = new JDatePicker(new UtilDateModel());
+
     private final JButton jbClear = new JButton("Clear");
     private final JButton jbSave = new JButton("Save");
     private boolean init = false;
@@ -79,7 +85,7 @@ public class FormBucket extends JDialog {
         }
         Bucket bucket = getBucket();
         try {
-            if (bucket.refillSchedule != null) {
+            if (bucket.refillSchedule != null && bucket.nextRefill == null) {
                 bucket.nextRefill = getNextRun(jtfRefillSchd.getText(), new Date());
             }
             DAOBucket.getInstance().save(bucket);
@@ -111,6 +117,10 @@ public class FormBucket extends JDialog {
         jtfName.setText(bucket.name == null ? "" : bucket.name);
         jtfBudget.setText(bucket.budget == null ? "" : bucket.budget.toString());
         jtfRefillSchd.setText(bucket.refillSchedule == null ? "" : bucket.refillSchedule);
+        Calendar cal = Calendar.getInstance();
+        cal.setTime(bucket.nextRefill);
+        picker.getModel().setDate(cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH));
+        picker.getModel().setSelected(true);
     }
 
     public Bucket getBucket() {
@@ -119,11 +129,19 @@ public class FormBucket extends JDialog {
         bucket.name = jtfName.getText().trim().isEmpty() ? null : jtfName.getText().trim();
         bucket.budget = jtfBudget.getText().trim().isEmpty() ? null : new BigDecimal(jtfBudget.getText().trim());
         bucket.refillSchedule = jtfRefillSchd.getText().trim().isEmpty() ? null : jtfRefillSchd.getText();
+        bucket.nextRefill = getDateFromPicker();
         bucket.acctId = Registry.getAcctId();
 
         return bucket;
     }
 
+    private Date getDateFromPicker() {
+        Calendar cal = Calendar.getInstance();
+        cal.set(Calendar.YEAR, picker.getModel().getYear());
+        cal.set(Calendar.MONTH, picker.getModel().getMonth());
+        cal.set(Calendar.DAY_OF_MONTH, picker.getModel().getDay());
+        return cal.getTime();
+    }
     public FormBucket(JFrame parent) {
         super(parent);
 
@@ -132,7 +150,7 @@ public class FormBucket extends JDialog {
         JPanel main = new JPanel();
 
         int gap = Registry.getGap();
-        ELayout layout = new ELayout(5, 10, Registry.getDotsPerSquare(), gap);
+        ELayout layout = new ELayout(6, 10, Registry.getDotsPerSquare(), gap);
         main.setLayout(layout);
         main.setBorder(BorderFactory.createEmptyBorder(gap, gap, gap, gap));
 
@@ -157,17 +175,27 @@ public class FormBucket extends JDialog {
         layout.setConstraints(jtfBudget, new EConstaint(3, 4, 3, 1));
         main.add(jtfBudget);
 
-        JLabel jlbRefFactor = new JLabel("Ref %:");
+        JLabel jlbRefFactor = new JLabel("Ref Schedule:");
         layout.setConstraints(jlbRefFactor, new EConstaint(4, 1, 3, 1));
         main.add(jlbRefFactor);
 
         layout.setConstraints(jtfRefillSchd, new EConstaint(4, 4, 3, 1));
         main.add(jtfRefillSchd);
 
-        layout.setConstraints(jbClear, new EConstaint(5, 5, 3, 1));
+        JLabel jlbNextRefill = new JLabel("Next Refill:");
+        layout.setConstraints(jlbNextRefill, new EConstaint(5, 1, 3, 1));
+        main.add(jlbNextRefill);
+
+        picker.setTextEditable(true);
+        picker.setShowYearButtons(true);
+        picker.setTextEditable(false);
+        layout.setConstraints((JComponent) picker, new EConstaint(5, 4, 6, 1));
+        main.add((JComponent) picker);
+
+        layout.setConstraints(jbClear, new EConstaint(6, 5, 3, 1));
         main.add(jbClear);
 
-        layout.setConstraints(jbSave, new EConstaint(5, 8, 3, 1));
+        layout.setConstraints(jbSave, new EConstaint(6, 8, 3, 1));
         main.add(jbSave);
 
         setLayout(new BorderLayout());

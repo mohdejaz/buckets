@@ -47,7 +47,7 @@ public class DAOBucket {
                         bucket.refillMtd = rs.getBigDecimal("rtd");
                         bucket.balance = rs.getBigDecimal("amt");
                         bucket.refillSchedule = rs.getString("refill_schd");
-                        bucket.nextRefill = rs.getDate("next_refill");
+                        bucket.nextRefill = rs.getDate("next_refill") != null ? new java.util.Date(rs.getDate("next_refill").getTime()) : null;
                         bucket.acctId = rs.getInt("acct_id");
                         result.add(bucket);
                     }
