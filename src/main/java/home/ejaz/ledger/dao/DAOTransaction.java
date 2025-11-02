@@ -61,11 +61,12 @@ public class DAOTransaction {
             if (tx.id == null) {
                 // new
                 try (PreparedStatement ps = conn.prepareStatement("insert into Transactions(tx_date, bucket, amount, note)" +
-                        " values (?, select id from Buckets where name = ?, ?, ?)")) {
+                        " values (?, select id from Buckets where name = ? and acct_id = ?, ?, ?)")) {
                     ps.setDate(1, new java.sql.Date(tx.txDate.getTime()));
                     ps.setString(2, tx.bucket);
-                    ps.setBigDecimal(3, tx.amount);
-                    ps.setString(4, tx.note);
+                    ps.setInt(3, Registry.getAcctId());
+                    ps.setBigDecimal(4, tx.amount);
+                    ps.setString(5, tx.note);
                     ps.executeUpdate();
                 }
             } else {
@@ -119,16 +120,16 @@ public class DAOTransaction {
     public void transfer(String fromBucket, String toBucket, BigDecimal amount) throws SQLException {
         try (Connection conn = DbUtils.getConnection()) {
             conn.setAutoCommit(false);
-            try (PreparedStatement ps = conn.prepareStatement("insert into Transactions(tx_date, bucket, amount, note)" +
-                    " values (?, select id from Buckets where name = ?, ?, ?)")) {
+            try (PreparedStatement ps = conn.prepareStatement("insert into Transactions(tx_date, bucket, amount, note, posted)" +
+                    " values (?, select id from Buckets where name = ?, ?, ?, 'Y')")) {
                 ps.setDate(1, new java.sql.Date(new Date().getTime()));
                 ps.setString(2, fromBucket);
                 ps.setBigDecimal(3, amount.multiply(new BigDecimal(-1)));
                 ps.setString(4, "Transfer to " + toBucket);
                 ps.executeUpdate();
             }
-            try (PreparedStatement ps = conn.prepareStatement("insert into Transactions(tx_date, bucket, amount, note)" +
-                    " values (?, select id from Buckets where name = ?, ?, ?)")) {
+            try (PreparedStatement ps = conn.prepareStatement("insert into Transactions(tx_date, bucket, amount, note, posted)" +
+                    " values (?, select id from Buckets where name = ?, ?, ?, 'Y')")) {
                 ps.setDate(1, new java.sql.Date(new Date().getTime()));
                 ps.setString(2, toBucket);
                 ps.setBigDecimal(3, amount);
