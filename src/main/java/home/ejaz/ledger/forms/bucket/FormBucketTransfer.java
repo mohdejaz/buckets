@@ -53,10 +53,7 @@ public class FormBucketTransfer extends JDialog {
         // Use a new model for clean refresh
         DefaultComboBoxModel<String> model = new DefaultComboBoxModel<>();
 
-        getBuckets().forEach(bucket -> {
-            logger.info("Adding " + bucket.name);
-            model.addElement(bucket.name);
-        });
+        getBuckets().forEach(bucket -> model.addElement(bucket.name));
 
         comboBox.setModel(model); // Automatically refreshes UI
     }

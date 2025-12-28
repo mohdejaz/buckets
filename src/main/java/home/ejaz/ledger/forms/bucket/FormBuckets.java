@@ -137,14 +137,14 @@ public class FormBuckets extends JPanel {
         for (int i = 0; i < bucketsTableModel.getRowCount(); i++) {
             if (selectedRows.contains(i)) {
                 Bucket bucket = bucketsTableModel.getBucket(i);
-                if (bucket.nextRefill == null || bucket.nextRefill.before(new Date())) {
+                // if (bucket.nextRefill == null || bucket.nextRefill.before(new Date())) {
                     logger.info("Refilling " + bucket.name + " --");
                     Transaction tx = new Transaction();
                     tx.bucket = bucket.name;
                     tx.amount = bucket.budget.multiply(new BigDecimal(bucket.refillFactor));
                     tx.note = "Refill";
                     tx.txDate = new Date();
-                    bucket.nextRefill = DateUtils.getNextRun(bucket.refillSchedule, bucket.nextRefill);
+                    // bucket.nextRefill = DateUtils.getNextRun(bucket.refillSchedule, bucket.nextRefill);
                     if (bucket.nextRefill == null) {
                         throw new RuntimeException("bucket.nextRefill is null!");
                     }
@@ -153,7 +153,7 @@ public class FormBuckets extends JPanel {
                     logger.info("TX Saved --");
                     refresh();
                     Registry.getBucketsListener().bkUpdate(bucket.id);
-                }
+                //}
             }
         }
     }

@@ -82,3 +82,14 @@ CREATE TABLE PUBLIC.USERS (
 );
 CREATE UNIQUE INDEX CONSTRAINT_INDEX_4 ON PUBLIC.USERS (NAME);
 CREATE UNIQUE INDEX PRIMARY_KEY_4 ON PUBLIC.USERS (ID);
+
+
+CREATE TABLE Items (
+	id long NOT NULL auto_increment,
+	name varchar(128) NOT NULL,
+	dop DATE NOT NULL,
+	price number(12,2) NOT NULL,
+	note text,
+	PRIMARY key(id),
+	UNIQUE (name, dop, price)
+);

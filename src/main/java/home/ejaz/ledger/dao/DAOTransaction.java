@@ -15,6 +15,8 @@ import java.util.ArrayList;
 import java.util.Date;
 
 public class DAOTransaction {
+    private final Logger logger = Logger.getLogger(DAOTransaction.class);
+
     private static final DAOTransaction instance = new DAOTransaction();
 
     public static DAOTransaction getInstance() {
@@ -50,6 +52,8 @@ public class DAOTransaction {
                         transactions.add(tx);
                     }
                 }
+            } catch (SQLException e) {
+                logger.warn("ERR: ", e);
             }
         }
 

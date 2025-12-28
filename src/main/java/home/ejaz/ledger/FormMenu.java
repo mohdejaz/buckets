@@ -23,13 +23,13 @@ import java.io.StringReader;
 public class FormMenu extends JFrame implements BucketsListener {
   private static final Logger logger = Logger.getLogger(FormMenu.class.getName());
 
-  private JMenuBar mb = new JMenuBar();
-  private JMenu mMenu = new JMenu("Menu");
-  private JMenuItem miAccounts = new JMenuItem("Accounts");
-  private JMenuItem miBuckets = new JMenuItem("Buckets");
-  private JMenuItem miTransactions = new JMenuItem("Transactions");
-  private JMenuItem miCalc = new JMenuItem("Calculator");
-  private JMenuItem miExit = new JMenuItem("Exit");
+  private final JMenuBar mb = new JMenuBar();
+  private final JMenu mMenu = new JMenu("Menu");
+  private final JMenuItem miAccounts = new JMenuItem("Accounts");
+  private final JMenuItem miBuckets = new JMenuItem("Buckets");
+  private final JMenuItem miTransactions = new JMenuItem("Transactions");
+  private final JMenuItem miCalc = new JMenuItem("Items");
+  private final JMenuItem miExit = new JMenuItem("Exit");
   private final CardLayout cardLayout = new CardLayout();
   private final JPanel cardPanel = new JPanel(cardLayout);
   private final JLabel cardTitle = new JLabel("Title ...");
@@ -73,11 +73,11 @@ public class FormMenu extends JFrame implements BucketsListener {
       });
 
       formCalc = new FormCalc(this);
-      cardPanel.add(formCalc, "Calculator");
+      cardPanel.add(formCalc, "Items");
       miCalc.addActionListener(e -> {
         formCalc.init();
-        cardTitle.setText("> Calculator");
-        cardLayout.show(cardPanel, "Calculator");
+        cardTitle.setText("> Items");
+        cardLayout.show(cardPanel, "Items");
       });
 
       miExit.addActionListener(al -> System.exit(0));
@@ -102,7 +102,7 @@ public class FormMenu extends JFrame implements BucketsListener {
     miTransactions.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_T, InputEvent.ALT_DOWN_MASK));
 
     mMenu.add(miCalc);
-    miCalc.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_C, InputEvent.ALT_DOWN_MASK));
+    miCalc.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_I, InputEvent.ALT_DOWN_MASK));
 
     mMenu.addSeparator();
 
@@ -139,9 +139,7 @@ public class FormMenu extends JFrame implements BucketsListener {
    */
   @Override
   public void txAdded(long id) {
-    logger.info("txAdded --");
     this.formBuckets.init();
-    // this.refresh();
   }
 
   /**
@@ -152,9 +150,7 @@ public class FormMenu extends JFrame implements BucketsListener {
    */
   @Override
   public void txUpdate(long id) {
-    logger.info("txUpdate --");
     this.formBuckets.init();
-    // this.refresh();
   }
 
   /**
@@ -165,9 +161,7 @@ public class FormMenu extends JFrame implements BucketsListener {
    */
   @Override
   public void txDelete(long id) {
-    logger.info("txDelete --");
     this.formBuckets.init();
-    // this.refresh();
   }
 
   /**
@@ -180,7 +174,6 @@ public class FormMenu extends JFrame implements BucketsListener {
   public void bkAdded(int id) {
     logger.info("bkAdded --");
     this.formTransactions.init();
-    // this.refresh();
   }
 
   /**
@@ -191,9 +184,7 @@ public class FormMenu extends JFrame implements BucketsListener {
    */
   @Override
   public void bkUpdate(int id) {
-    logger.info("bkUpdate --");
     this.formTransactions.init();
-    // this.refresh();
   }
 
   /**
@@ -204,9 +195,7 @@ public class FormMenu extends JFrame implements BucketsListener {
    */
   @Override
   public void bkDelete(int id) {
-    logger.info("bkDelete --");
     this.formTransactions.init();
-    // this.refresh();
   }
 
   /**
@@ -217,7 +206,6 @@ public class FormMenu extends JFrame implements BucketsListener {
    */
   @Override
   public void acctSelected(int id) {
-    logger.info("acctSelected --");
     setTitle(Registry.getTitle());
     if (this.formTransactions != null) {
       this.formTransactions.init();
