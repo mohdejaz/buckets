@@ -1,25 +1,26 @@
 package home.ejaz.ledger.forms.accounts;
 
+import home.ejaz.ledger.Context;
+import home.ejaz.ledger.FormMenu;
 import home.ejaz.ledger.Registry;
 import home.ejaz.ledger.dao.DAOAccounts;
-import home.ejaz.ledger.models.*;
+import home.ejaz.ledger.models.Account;
+import home.ejaz.ledger.models.AccountsTableModel;
 import home.ejaz.ledger.util.TableUtils;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import javax.swing.*;
 import java.awt.*;
-import java.awt.event.MouseAdapter;
-import java.awt.event.MouseEvent;
 import java.math.BigDecimal;
 import java.text.DecimalFormat;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Set;
-import java.util.function.BiFunction;
 import java.util.stream.Collectors;
 
 public class FormAccounts extends JPanel {
-  private static final Logger logger = Logger.getLogger(FormAccounts.class.getName());
+  private static final Logger logger = LogManager.getLogger(FormAccounts.class.getName());
 
   private final AccountsTableModel acctsTableModel = new AccountsTableModel();
   private final JTable table = new JTable(acctsTableModel);
@@ -31,19 +32,16 @@ public class FormAccounts extends JPanel {
   private FormAccount formAccount;
   private final JFrame parent;
   private boolean init;
-  private int lastTouchedAcctId = -1;
+  private Integer selectedAcctId;
 
   /* Common Accounts table update */
   private void updateSelection() {
     BigDecimal balance = BigDecimal.ZERO;
     for (int row = 0; row < accounts.size(); row++) {
       Account acct = accounts.get(row);
-      balance = balance.add(acct.balance);
-      if (acct.id == lastTouchedAcctId) {
+      balance = balance.add(acct.getBalance());
+      if (acct.getId() == selectedAcctId) {
         this.table.addRowSelectionInterval(row, row);
-        Registry.setAcctId(acct.id);
-        Registry.setTitle(acct.name);
-        Registry.getBucketsListener().acctSelected(acct.id);
       }
     }
     jlbStatus.setText(" Balance: " + new DecimalFormat("###,###,###.00").format(balance));
@@ -52,12 +50,18 @@ public class FormAccounts extends JPanel {
   /* This method is called when bucket/transaction updates */
   private void refresh() {
     accounts.clear();
-    accounts.addAll(DAOAccounts.getInstance().getAccounts(Registry.getUserId()));
+    accounts.addAll(DAOAccounts.getInstance().getAccounts(Context.getUserId())); // Registry.getUserId()
     acctsTableModel.setAccounts(accounts);
-    if (lastTouchedAcctId == -1 && !accounts.isEmpty()) {
-      lastTouchedAcctId = accounts.get(0).id;
+    if (selectedAcctId == null && !accounts.isEmpty()) {
+      setSelectedAccount(accounts.get(0));
     }
     updateSelection();
+  }
+
+  private void setSelectedAccount(Account acct) {
+    selectedAcctId = acct.getId();
+    Context.setAcctId(acct.getId());
+    ((JFrame)SwingUtilities.getWindowAncestor(this)).setTitle(acct.getName());
   }
 
   public void init() {
@@ -69,11 +73,7 @@ public class FormAccounts extends JPanel {
       this.table.getSelectionModel().addListSelectionListener(l -> {
         int row = table.getSelectedRow();
         if (row != -1) {
-          Account acct = acctsTableModel.getAccount(row);
-          this.lastTouchedAcctId = acct.id;
-          Registry.setAcctId(acct.id);
-          Registry.setTitle(acct.name);
-          Registry.getBucketsListener().acctSelected(acct.id);
+          setSelectedAccount(acctsTableModel.getAccount(row));
         }
       });
 
@@ -90,7 +90,6 @@ public class FormAccounts extends JPanel {
     formAccount.init();
     formAccount.setVisible(true);
     refresh();
-    Registry.getBucketsListener().acctAdded(-1);
   }
 
   private void doAcctEdit() {
@@ -108,19 +107,16 @@ public class FormAccounts extends JPanel {
     if (row != -1) {
       formAccount.init();
       Account account = acctsTableModel.getAccount(row);
-      this.lastTouchedAcctId = account.id;
+      this.selectedAcctId = account.getId();
       formAccount.setAccount(account);
       // Set values
       formAccount.setVisible(true);
       refresh();
-      Registry.getBucketsListener().bkUpdate(-1);
     }
   }
 
-  public FormAccounts(JFrame parent) {
+  public FormAccounts(FormMenu parent) {
     this.parent = parent;
-
-    init();
 
     JPanel main = new JPanel();
     // main.setBorder(BorderFactory.createEmptyBorder(7, 7, 7, 7));

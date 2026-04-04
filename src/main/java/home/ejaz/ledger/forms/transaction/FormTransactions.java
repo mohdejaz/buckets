@@ -1,6 +1,7 @@
 package home.ejaz.ledger.forms.transaction;
 
 import com.opencsv.CSVWriter;
+import home.ejaz.ledger.Context;
 import home.ejaz.ledger.Registry;
 import home.ejaz.ledger.dao.DAOTransaction;
 import home.ejaz.ledger.models.Transaction;
@@ -36,23 +37,25 @@ public class FormTransactions extends JPanel {
   private final JTable table = new JTable(txTableModel);
   private FormTransaction formTransaction;
   private boolean init = false;
-  private long lastSelectTx = -1;
+  private Long selectTxId;
   private final JFrame jframe;
 
   private void refresh() {
     try {
       this.list.clear();
-      this.list.addAll(DAOTransaction.getInstance().getTransactions(Registry.getAcctId(), jtFilter.getText()));
-      this.txTableModel.setTransactions(list);
-      BigDecimal balance = BigDecimal.ZERO;
-      for (int row = 0; row < this.list.size(); row++) {
-        Transaction tx = this.txTableModel.getTransaction(row);
-        balance = balance.add(tx.amount);
-        if (tx.id == lastSelectTx) {
-          this.table.addRowSelectionInterval(row, row);
+      if (Context.getAcctId() != null) {
+        this.list.addAll(DAOTransaction.getInstance().getTransactions(Context.getAcctId(), jtFilter.getText()));
+        this.txTableModel.setTransactions(list);
+        BigDecimal balance = BigDecimal.ZERO;
+        for (int row = 0; row < this.list.size(); row++) {
+          Transaction tx = this.txTableModel.getTransaction(row);
+          balance = balance.add(tx.getAmount());
+          if (tx.getId()  == selectTxId) {
+            this.table.addRowSelectionInterval(row, row);
+          }
         }
+        lbStatus.setText(" Balance: " + new DecimalFormat("###,###,###.00").format(balance));
       }
-      lbStatus.setText(" Balance: " + new DecimalFormat("###,###,###.00").format(balance));
     } catch (Exception e) {
       e.printStackTrace(System.err);
       System.exit(1);
@@ -68,8 +71,7 @@ public class FormTransactions extends JPanel {
     }
     for (Transaction tx : delTxList) {
       try {
-        DAOTransaction.getInstance().delete(tx.id);
-        Registry.getBucketsListener().txDelete(tx.id);
+        DAOTransaction.getInstance().delete(tx.getId());
       } catch (SQLException e) {
         e.printStackTrace(System.err);
       }
@@ -82,7 +84,6 @@ public class FormTransactions extends JPanel {
     formTransaction.init();
     formTransaction.setVisible(true);
     refresh();
-    Registry.getBucketsListener().txAdded(-1);
   }
 
   private void doTxEdit() {
@@ -90,10 +91,9 @@ public class FormTransactions extends JPanel {
     formTransaction.init();
     for (int row : table.getSelectedRows()) {
       Transaction tx = this.txTableModel.getTransaction(row);
-      this.lastSelectTx = tx.id;
+      this.selectTxId = tx.getId();
       formTransaction.setTransaction(tx);
       formTransaction.setVisible(true);
-      Registry.getBucketsListener().txUpdate(-1);
     }
     refresh();
   }
@@ -102,8 +102,8 @@ public class FormTransactions extends JPanel {
     DAOTransaction daoTransaction = DAOTransaction.getInstance();
     for (int row : table.getSelectedRows()) {
       Transaction tx = this.txTableModel.getTransaction(row);
-      this.lastSelectTx = tx.id;
-      daoTransaction.post(tx.id);
+      this.selectTxId = tx.getId();
+      daoTransaction.post(tx.getId());
     }
     refresh();
   }
@@ -112,8 +112,8 @@ public class FormTransactions extends JPanel {
     DAOTransaction daoTransaction = DAOTransaction.getInstance();
     for (int row : table.getSelectedRows()) {
       Transaction tx = this.txTableModel.getTransaction(row);
-      this.lastSelectTx = tx.id;
-      daoTransaction.unpost(tx.id);
+      this.selectTxId = tx.getId();
+      daoTransaction.unpost(tx.getId());
     }
     refresh();
   }
@@ -126,12 +126,12 @@ public class FormTransactions extends JPanel {
       for (Transaction tx : this.list) {
         // new String[]{"Posted", "Id", "TxDate", "Bucket", "Amount", "Note"};
         cw.writeNext(new String[]{
-          "" + tx.posted,
-          "" + tx.id,
-          "" + tx.txDate,
-          tx.bucket,
-          "" + tx.amount,
-          tx.note
+          "" + tx.isPosted(),
+          "" + tx.getId(),
+          "" + tx.getTxDate(),
+          tx.getBucket(),
+          "" + tx.getAmount(),
+          tx.getNote()
         });
       }
     }
@@ -152,7 +152,7 @@ public class FormTransactions extends JPanel {
         int row = table.getSelectedRow();
         if (row != -1) {
           Transaction tx = this.txTableModel.getTransaction(row);
-          this.lastSelectTx = tx.id;
+          this.selectTxId = tx.getId();
         }
       });
 

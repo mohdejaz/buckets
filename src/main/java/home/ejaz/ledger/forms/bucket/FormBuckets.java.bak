@@ -1,15 +1,15 @@
 package home.ejaz.ledger.forms.bucket;
 
-import home.ejaz.ledger.Context;
 import home.ejaz.ledger.Registry;
 import home.ejaz.ledger.dao.DAOBucket;
 import home.ejaz.ledger.dao.DAOTransaction;
 import home.ejaz.ledger.models.Bucket;
 import home.ejaz.ledger.models.BucketsTableModel;
 import home.ejaz.ledger.models.Transaction;
+import home.ejaz.ledger.util.CellRenderer;
+import home.ejaz.ledger.util.DateUtils;
 import home.ejaz.ledger.util.TableUtils;
-import org.apache.logging.log4j.LogManager;
-import org.apache.logging.log4j.Logger;
+import org.apache.log4j.Logger;
 
 import javax.swing.*;
 import java.awt.*;
@@ -19,13 +19,11 @@ import java.math.BigDecimal;
 import java.sql.SQLException;
 import java.text.DecimalFormat;
 import java.time.LocalDate;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Set;
+import java.util.*;
 import java.util.stream.Collectors;
 
 public class FormBuckets extends JPanel {
-    private static final Logger logger = LogManager.getLogger(FormBuckets.class.getName());
+    private static final Logger logger = Logger.getLogger(FormBuckets.class.getName());
 
     private final JButton jbNew = new JButton("New");
     private final JButton jbEdit = new JButton("Edit");
@@ -41,41 +39,35 @@ public class FormBuckets extends JPanel {
     private FormBucket formBucket;
     private FormBucketTransfer formBucketTransfer;
     private boolean init = false;
-    private Integer selectBuckId;
+    private int lastSelectBk = -1;
     private final JFrame parent;
 
     private void refresh() {
         try {
             this.list.clear();
-            logger.info("AcctId: {}", Context.getAcctId());
-            if (Context.getAcctId() != null) {
-                this.list.addAll(DAOBucket.getInstance().getBuckets(Context.getAcctId()));
-                this.bucketsTableModel.setBuckets(list);
-                BigDecimal balance = BigDecimal.ZERO;
-                for (int row = 0; row < this.list.size(); row++) {
-                    Bucket bucket = this.list.get(row);
-                    balance = balance.add(bucket.getBalance());
-                    if (selectBuckId != null && bucket.getId() == selectBuckId) {
-                        this.table.addRowSelectionInterval(row, row);
-                        // break;
-                    }
+            this.list.addAll(DAOBucket.getInstance().getBuckets(Registry.getAcctId()));
+            this.bucketsTableModel.setBuckets(list);
+            BigDecimal balance = BigDecimal.ZERO;
+            for (int row = 0; row < this.list.size(); row++) {
+                Bucket bucket = this.list.get(row);
+                balance = balance.add(bucket.balance);
+                if (bucket.id == lastSelectBk) {
+                    this.table.addRowSelectionInterval(row, row);
+                    // break;
                 }
-                lbStatus.setText(" Balance: " + new DecimalFormat("###,###,###.00").format(balance));
             }
+            lbStatus.setText(" Balance: " + new DecimalFormat("###,###,###.00").format(balance));
         } catch (Exception e) {
             logger.warn("Error", e);
             System.exit(1);
         }
     }
 
-    public Integer getBuckId() {
-        return selectBuckId;
-    }
-
     private void doBuckAdd() {
         formBucket.init();
         formBucket.setVisible(true);
         refresh();
+        Registry.getBucketsListener().bkAdded(-1);
     }
 
     private void doBuckTransfer() {
@@ -99,11 +91,12 @@ public class FormBuckets extends JPanel {
         if (row != -1) {
             formBucket.init();
             Bucket bucket = bucketsTableModel.getBucket(row);
-            this.selectBuckId = bucket.getId();
+            this.lastSelectBk = bucket.id;
             formBucket.setBucket(bucket);
             // Set values
             formBucket.setVisible(true);
             refresh();
+            Registry.getBucketsListener().bkUpdate(-1);
         }
     }
 
@@ -114,21 +107,23 @@ public class FormBuckets extends JPanel {
         LocalDate dt = LocalDate.now();
         for (int i = 0; i < bucketsTableModel.getRowCount(); i++) {
             Bucket bucket = bucketsTableModel.getBucket(i);
-            if (bucket.getBalance().doubleValue() > 0) {
-                logger.info("Resetting " + bucket.getName() + " --");
+            if (bucket.balance.doubleValue() > 0) {
+                logger.info("Resetting " + bucket.name + " --");
                 Transaction tx = new Transaction();
-                tx.setBucket(bucket.getName());
-                tx.setAmount(bucket.getBalance().multiply(BigDecimal.valueOf(-1.0)));
-                tx.setTxDate(java.sql.Date.valueOf(dt));
-                tx.setNote("Reset");
-                daoTransaction.save(tx, Context.getAcctId());
+                tx.bucket = bucket.name;
+                tx.amount = bucket.balance.multiply(BigDecimal.valueOf(-1.0));
+                tx.txDate = java.sql.Date.valueOf(dt);
+                tx.note = "Reset";
+                daoTransaction.save(tx);
                 logger.info("TX Saved --");
                 refresh();
+                Registry.getBucketsListener().bkUpdate(bucket.id);
             }
         }
     }
 
     public void doBuckRefill() throws SQLException {
+        DAOBucket daoBucket = DAOBucket.getInstance();
         DAOTransaction daoTransaction = DAOTransaction.getInstance();
         Set<Integer> selectedRows = Arrays.stream(this.table.getSelectedRows()).boxed().collect(Collectors.toSet());
         if (selectedRows.isEmpty()) {
@@ -142,15 +137,23 @@ public class FormBuckets extends JPanel {
         for (int i = 0; i < bucketsTableModel.getRowCount(); i++) {
             if (selectedRows.contains(i)) {
                 Bucket bucket = bucketsTableModel.getBucket(i);
-                logger.info("Refilling " + bucket.getName() + " --");
-                Transaction tx = new Transaction();
-                tx.setBucket(bucket.getName());
-                tx.setAmount(bucket.getBudget().multiply(bucket.getRefillFactor()));
-                tx.setNote("Refill");
-                tx.setTxDate(new java.sql.Date(System.currentTimeMillis()));
-                daoTransaction.save(tx, Context.getAcctId());
-                logger.info("TX Saved --");
-                refresh();
+                // if (bucket.nextRefill == null || bucket.nextRefill.before(new Date())) {
+                    logger.info("Refilling " + bucket.name + " --");
+                    Transaction tx = new Transaction();
+                    tx.bucket = bucket.name;
+                    tx.amount = bucket.budget.multiply(new BigDecimal(bucket.refillFactor));
+                    tx.note = "Refill";
+                    tx.txDate = new Date();
+                    // bucket.nextRefill = DateUtils.getNextRun(bucket.refillSchedule, bucket.nextRefill);
+                    if (bucket.nextRefill == null) {
+                        throw new RuntimeException("bucket.nextRefill is null!");
+                    }
+                    daoBucket.save(bucket);
+                    daoTransaction.save(tx);
+                    logger.info("TX Saved --");
+                    refresh();
+                    Registry.getBucketsListener().bkUpdate(bucket.id);
+                //}
             }
         }
     }
@@ -165,7 +168,7 @@ public class FormBuckets extends JPanel {
                 int row = table.getSelectedRow();
                 if (row != -1) {
                     Bucket bucket = bucketsTableModel.getBucket(row);
-                    this.selectBuckId = bucket.getId();
+                    this.lastSelectBk = bucket.id;
                 }
             });
 

@@ -2,16 +2,14 @@ package home.ejaz.ledger;
 
 import home.ejaz.ledger.forms.accounts.FormAccounts;
 import home.ejaz.ledger.forms.bucket.FormBuckets;
-import home.ejaz.ledger.forms.calc.FormCalc;
 import home.ejaz.ledger.forms.transaction.FormTransactions;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import javax.swing.*;
 import java.awt.*;
 import java.awt.event.InputEvent;
 import java.awt.event.KeyEvent;
-import java.io.InputStreamReader;
-import java.io.StringReader;
 
 /**
  * Main form with menu & Accounts table.
@@ -20,29 +18,25 @@ import java.io.StringReader;
  * @author Ejaz Mohammed
  * @since 1.0
  */
-public class FormMenu extends JFrame implements BucketsListener {
-  private static final Logger logger = Logger.getLogger(FormMenu.class.getName());
+public class FormMenu extends JFrame {
+  private static final Logger logger = LogManager.getLogger(FormMenu.class.getName());
 
   private final JMenuBar mb = new JMenuBar();
   private final JMenu mMenu = new JMenu("Menu");
   private final JMenuItem miAccounts = new JMenuItem("Accounts");
   private final JMenuItem miBuckets = new JMenuItem("Buckets");
   private final JMenuItem miTransactions = new JMenuItem("Transactions");
-  private final JMenuItem miCalc = new JMenuItem("Items");
   private final JMenuItem miExit = new JMenuItem("Exit");
   private final CardLayout cardLayout = new CardLayout();
   private final JPanel cardPanel = new JPanel(cardLayout);
   private final JLabel cardTitle = new JLabel("Title ...");
   private FormBuckets formBuckets;
   private FormTransactions formTransactions;
-  private FormCalc formCalc;
   private FormAccounts formAccounts;
   private boolean init = false;
 
   private void init() {
     if (!init) {
-      Registry.setBucketsListener(this);
-
       cardTitle.setText("> Welcome");
       JLabel lb = new JLabel(Registry.getWelcomeMessage());
       lb.setVerticalAlignment(JLabel.TOP);
@@ -72,14 +66,6 @@ public class FormMenu extends JFrame implements BucketsListener {
         cardLayout.show(cardPanel, "Transactions");
       });
 
-      formCalc = new FormCalc(this);
-      cardPanel.add(formCalc, "Items");
-      miCalc.addActionListener(e -> {
-        formCalc.init();
-        cardTitle.setText("> Items");
-        cardLayout.show(cardPanel, "Items");
-      });
-
       miExit.addActionListener(al -> System.exit(0));
       init = true;
     }
@@ -101,9 +87,6 @@ public class FormMenu extends JFrame implements BucketsListener {
     mMenu.add(miTransactions);
     miTransactions.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_T, InputEvent.ALT_DOWN_MASK));
 
-    mMenu.add(miCalc);
-    miCalc.setAccelerator(KeyStroke.getKeyStroke(KeyEvent.VK_I, InputEvent.ALT_DOWN_MASK));
-
     mMenu.addSeparator();
 
     mMenu.add(miExit);
@@ -124,106 +107,9 @@ public class FormMenu extends JFrame implements BucketsListener {
     getContentPane().add(main);
     setJMenuBar(mb);
 
-    setTitle(Registry.getTitle());
     setDefaultCloseOperation(EXIT_ON_CLOSE);
     setSize(800, 600);
     setLocationRelativeTo(null);
     setVisible(true);
-  }
-
-  /**
-   * Listener method called when new Transaction added.
-   * Refresh Accounts and Buckets forms.
-   *
-   * @param id - New Transaction Id
-   */
-  @Override
-  public void txAdded(long id) {
-    this.formBuckets.init();
-  }
-
-  /**
-   * Listener method called when new Transaction update.
-   * Refresh Accounts and Buckets forms.
-   *
-   * @param id -  Transaction Id
-   */
-  @Override
-  public void txUpdate(long id) {
-    this.formBuckets.init();
-  }
-
-  /**
-   * Listener method called when new Transaction deleted.
-   * Refresh Accounts and Buckets forms.
-   *
-   * @param id -  Transaction Id
-   */
-  @Override
-  public void txDelete(long id) {
-    this.formBuckets.init();
-  }
-
-  /**
-   * Listener method called when new Bucket added.
-   * Refresh Accounts and Transactions forms.
-   *
-   * @param id -  New Bucket Id
-   */
-  @Override
-  public void bkAdded(int id) {
-    logger.info("bkAdded --");
-    this.formTransactions.init();
-  }
-
-  /**
-   * Listener method called when new Bucket updated.
-   * Refresh Accounts and Transactions forms.
-   *
-   * @param id -  Bucket Id
-   */
-  @Override
-  public void bkUpdate(int id) {
-    this.formTransactions.init();
-  }
-
-  /**
-   * Listener method called when new Bucket deleted.
-   * Refresh Accounts and Transactions forms.
-   *
-   * @param id -  Bucket Id
-   */
-  @Override
-  public void bkDelete(int id) {
-    this.formTransactions.init();
-  }
-
-  /**
-   * Listener method called new Account selected.
-   * Refresh Buckets and Transactions forms.
-   *
-   * @param id -  Account Id
-   */
-  @Override
-  public void acctSelected(int id) {
-    setTitle(Registry.getTitle());
-    if (this.formTransactions != null) {
-      this.formTransactions.init();
-    }
-    if (this.formBuckets != null) {
-      this.formBuckets.init();
-    }
-  }
-
-  @Override
-  public void acctAdded(int id) {
-  }
-
-  @Override
-  public void acctUpdated(int id) {
-  }
-
-  @Override
-  public void acctDeleted(int id) {
   }
 }

@@ -29,28 +29,15 @@ public class TransactionsTableModel extends AbstractTableModel implements Number
   @Override
   public Object getValueAt(int rowIndex, int columnIndex) {
     Transaction tx = transactions.get(rowIndex);
-    switch (columnIndex) {
-      case 0: {
-        return tx.posted ? "Y" : "N";
-      }
-      case 1: {
-        return tx.id;
-      }
-      case 2: {
-        return tx.txDate != null ? sdf.format(tx.txDate) : "N/A";
-      }
-      case 3: {
-        return tx.bucket;
-      }
-      case 4: {
-        return tx.amount;
-      }
-      case 5: {
-        return tx.note;
-      }
-      default:
-        return null;
-    }
+      return switch (columnIndex) {
+          case 0 -> tx.isPosted() ? "Y" : "N";
+          case 1 -> tx.getId();
+          case 2 -> tx.getTxDate() != null ? sdf.format(tx.getTxDate()) : "N/A";
+          case 3 -> tx.getBucket();
+          case 4 -> tx.getAmount();
+          case 5 -> tx.getNote();
+          default -> null;
+      };
   }
 
   @Override

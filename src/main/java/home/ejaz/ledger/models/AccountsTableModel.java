@@ -28,9 +28,9 @@ public class AccountsTableModel extends AbstractTableModel implements NumberMode
   public Object getValueAt(int rowIndex, int columnIndex) {
     Account account = accounts.get(rowIndex);
     return switch (columnIndex) {
-      case 0 -> account.id;
-      case 1 -> account.name;
-      case 2 -> account.balance;
+      case 0 -> account.getId();
+      case 1 -> account.getName();
+      case 2 -> account.getBalance();
       default -> null;
     };
   }

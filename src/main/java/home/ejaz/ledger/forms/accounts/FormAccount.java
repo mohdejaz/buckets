@@ -7,7 +7,8 @@ import home.ejaz.ledger.layout.EConstaint;
 import home.ejaz.ledger.layout.ELayout;
 import home.ejaz.ledger.models.Account;
 import home.ejaz.ledger.models.Bucket;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 
 import javax.swing.*;
 import java.awt.*;
@@ -17,7 +18,7 @@ import java.awt.event.KeyListener;
 import java.math.BigDecimal;
 
 public class FormAccount extends JDialog {
-  private static final Logger logger = Logger.getLogger(FormAccount.class.getName());
+  private static final Logger logger = LogManager.getLogger(FormAccount.class.getName());
 
   private final JTextField jtfId = new JTextField();
   private final JTextField jtfName = new JTextField();
@@ -79,17 +80,17 @@ public class FormAccount extends JDialog {
   }
 
   public void setAccount(Account account) {
-    jtfId.setText(account.id == null ? "" : account.id.toString());
-    jtfName.setText(account.name == null ? "" : account.name);
-    jtfBalance.setText(account.balance == null ? "" : account.balance.toString());
+    jtfId.setText(account.getId() == null ? "" : account.getId().toString());
+    jtfName.setText(account.getName() == null ? "" : account.getName());
+    jtfBalance.setText(account.getBalance() == null ? "" : account.getBalance().toString());
   }
 
   public Account getAccount() {
     Account account = new Account();
-    account.id = jtfId.getText().isEmpty() ? null : Integer.valueOf(jtfId.getText());
-    account.name = jtfName.getText().trim().isEmpty() ? null : jtfName.getText().trim();
-    account.balance = jtfBalance.getText().trim().isEmpty() ? null : new BigDecimal(jtfBalance.getText().trim());
-    account.userId = Registry.getUserId();
+    account.setId(jtfId.getText().isEmpty() ? null : Integer.valueOf(jtfId.getText()));
+    account.setName(jtfName.getText().trim().isEmpty() ? null : jtfName.getText().trim());
+    account.setBalance(jtfBalance.getText().trim().isEmpty() ? null : new BigDecimal(jtfBalance.getText().trim()));
+    account.setUserId(Registry.getUserId());
 
     return account;
   }

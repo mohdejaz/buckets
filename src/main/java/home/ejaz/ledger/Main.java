@@ -63,12 +63,12 @@ public class Main extends JFrame {
   }
 
   public static void main(String[] args) throws Exception {
-    try {
-      UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
-    } catch (ClassNotFoundException | InstantiationException | IllegalAccessException |
-             UnsupportedLookAndFeelException e) {
-      e.printStackTrace(System.err);
-    }
+//    try {
+//      UIManager.setLookAndFeel(UIManager.getSystemLookAndFeelClassName());
+//    } catch (ClassNotFoundException | InstantiationException | IllegalAccessException |
+//             UnsupportedLookAndFeelException e) {
+//      e.printStackTrace(System.err);
+//    }
 
     setFont(new FontUIResource(new Font("Verdana", Font.PLAIN, Registry.getFontSize())));
     new FormMenu();

@@ -1,20 +1,20 @@
 package home.ejaz.ledger;
 
-import org.apache.log4j.Logger;
 
-import java.io.*;
-import java.net.URL;
-import java.nio.file.Files;
-import java.nio.file.Paths;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
+import java.io.BufferedReader;
+import java.io.InputStream;
+import java.io.InputStreamReader;
 import java.util.Properties;
 
 public class Registry {
-  private static final org.apache.log4j.Logger logger = Logger.getLogger(Registry.class.getName());
+  private static final Logger logger = LogManager.getLogger(Registry.class.getName());
   private static String prof = "dev";
   private static Properties props;
   private static int acctId = -1;
   private static String title = "Buckets";
-  private static BucketsListener bucketsListener;
   private static String welcomeMessage = "N/A";
 
   static {
@@ -89,31 +89,5 @@ public class Registry {
 
   public static int getUserId() {
     return Integer.parseInt(getValue("user.id", "1"));
-  }
-
-  public synchronized static int getAcctId() {
-    if (acctId != -1) return acctId;
-    return Integer.parseInt(getValue("acct.id", "1"));
-  }
-
-  public synchronized static void setAcctId(int value) {
-    logger.info("Prev acct_id: " + acctId + " New value: " + value);
-    acctId = value;
-  }
-
-  public synchronized static String getTitle() {
-    return getValue("title", "Buckets") + " - " + title;
-  }
-
-  public synchronized static void setTitle(String value) {
-    title = value;
-  }
-
-  public static BucketsListener getBucketsListener() {
-    return bucketsListener;
-  }
-
-  public static void setBucketsListener(BucketsListener value) {
-    bucketsListener = value;
   }
 }

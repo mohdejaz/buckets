@@ -8,7 +8,7 @@ import java.util.Date;
 import java.util.List;
 
 public class BucketsTableModel extends AbstractTableModel implements NumberModel {
-    private String[] colNames = new String[]{"Id", "Name", "Budget", "Refill Amt", "Next Refill", "Balance"};
+    private String[] colNames = new String[]{"Id", "Name", "Budget", "Refill Amt", "Last Month", "Balance"};
     private List<Bucket> buckets = new ArrayList<>();
     private SimpleDateFormat sdf = new SimpleDateFormat("yyyy-MM-dd");
 
@@ -32,22 +32,22 @@ public class BucketsTableModel extends AbstractTableModel implements NumberModel
         Bucket bucket = buckets.get(rowIndex);
         switch (columnIndex) {
             case 0: {
-                return bucket.id;
+                return bucket.getId();
             }
             case 1: {
-                return bucket.name;
+                return bucket.getName();
             }
             case 2: {
-                return bucket.budget;
+                return bucket.getBudget();
             }
             case 3: {
-                return bucket.refillMtd;
+                return bucket.getRefillMtd();
             }
             case 4: {
-                return bucket.nextRefill != null ? sdf.format(bucket.nextRefill) : null;
+                return bucket.getPrevBalance();
             }
             case 5: {
-                return bucket.balance;
+                return bucket.getBalance();
             }
             default:
                 return null;
@@ -58,7 +58,7 @@ public class BucketsTableModel extends AbstractTableModel implements NumberModel
     public Class getColumnClass(int columnIndex) {
         return switch (columnIndex) {
             case 0 -> Integer.class;
-            case 2, 3, 5 -> BigDecimal.class;
+            case 2, 3, 4, 5 -> BigDecimal.class;
             default -> String.class;
         };
     }

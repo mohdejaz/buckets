@@ -1,5 +1,6 @@
 package home.ejaz.ledger.forms.transaction;
 
+import home.ejaz.ledger.Context;
 import home.ejaz.ledger.Registry;
 import home.ejaz.ledger.dao.DAOBucket;
 import home.ejaz.ledger.dao.DAOTransaction;
@@ -7,7 +8,8 @@ import home.ejaz.ledger.layout.EConstaint;
 import home.ejaz.ledger.layout.ELayout;
 import home.ejaz.ledger.models.Bucket;
 import home.ejaz.ledger.models.Transaction;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.jdatepicker.DatePicker;
 import org.jdatepicker.JDatePicker;
 import org.jdatepicker.UtilDateModel;
@@ -23,7 +25,7 @@ import java.util.Date;
 import java.util.Objects;
 
 public class FormTransaction extends JDialog {
-  private final Logger logger = Logger.getLogger(FormTransaction.class);
+  private final Logger logger = LogManager.getLogger(FormTransaction.class);
 
   private final JTextField jtfId = new JTextField();
   private final DatePicker picker = new JDatePicker(new UtilDateModel());
@@ -40,8 +42,10 @@ public class FormTransaction extends JDialog {
   private void refresh() {
     try {
       this.jcBucket.removeAllItems();
-      for (Bucket bucket : DAOBucket.getInstance().getBuckets(Registry.getAcctId())) {
-        this.jcBucket.addItem(bucket.name);
+      if (Context.getAcctId() != null) {
+        for (Bucket bucket : DAOBucket.getInstance().getBuckets(Context.getAcctId())) {
+          this.jcBucket.addItem(bucket.getName());
+        }
       }
     } catch (Exception e) {
       logger.warn("Error", e);
@@ -80,7 +84,7 @@ public class FormTransaction extends JDialog {
     }
     Transaction tx = getTransaction();
     try {
-      DAOTransaction.getInstance().save(tx);
+      DAOTransaction.getInstance().save(tx, Context.getAcctId());
       lastDate = getDateFromPicker();
       if (jtfId.getText().isEmpty()) {
         this.txAdded = true;
@@ -142,21 +146,21 @@ public class FormTransaction extends JDialog {
 
   public Transaction getTransaction() {
     Transaction tx = new Transaction();
-    tx.id = !jtfId.getText().isEmpty() ? Long.parseLong(jtfId.getText()) : null;
-    tx.txDate = getDateFromPicker();
-    tx.bucket = Objects.requireNonNull(jcBucket.getSelectedItem()).toString();
-    tx.amount = !jtfAmount.getText().isEmpty() ? new BigDecimal(jtfAmount.getText()) : null;
-    tx.note = jtfNote.getText();
+    tx.setId(!jtfId.getText().isEmpty() ? Long.parseLong(jtfId.getText()) : null);
+    tx.setTxDate(new java.sql.Date(getDateFromPicker().getTime()));
+    tx.setBucket(Objects.requireNonNull(jcBucket.getSelectedItem()).toString());
+    tx.setAmount(!jtfAmount.getText().isEmpty() ? new BigDecimal(jtfAmount.getText()) : null);
+    tx.setNote(jtfNote.getText());
     System.out.println("tx --> " + tx);
     return tx;
   }
 
   public void setTransaction(Transaction tx) {
-    jtfId.setText(tx.id.toString());
-    setDateToPicker(tx.txDate);
-    jcBucket.setSelectedItem(tx.bucket);
-    jtfAmount.setText(tx.amount.toString());
-    jtfNote.setText(tx.note);
+    jtfId.setText(tx.getId().toString());
+    setDateToPicker(tx.getTxDate());
+    jcBucket.setSelectedItem(tx.getBucket());
+    jtfAmount.setText(tx.getAmount().toString());
+    jtfNote.setText(tx.getNote());
   }
 
   public FormTransaction(JFrame jFrame) {

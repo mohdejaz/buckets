@@ -1,0 +1,49 @@
+package home.ejaz.ledger.util;
+
+import home.ejaz.ledger.Registry;
+import home.ejaz.ledger.dao.DAOAccounts;
+import org.apache.spark.sql.Dataset;
+import org.apache.spark.sql.Row;
+import org.apache.spark.sql.SparkSession;
+import org.slf4j.LoggerFactory;
+
+import java.util.HashMap;
+import java.util.Map;
+import java.util.Properties;
+
+public class SparkUtils {
+    private static final org.slf4j.Logger log = LoggerFactory.getLogger(SparkUtils.class);
+
+    public static SparkSession getSparkSession() {
+        return SparkSession.builder().appName("Spark Java Hello").master("local[*]").getOrCreate();
+    }
+
+    public static Map<String, Dataset<Row>> getEntities(SparkSession spark) {
+        Map<String, Dataset<Row>> outputs = new HashMap<>();
+
+        Properties props = new Properties();
+        props.put("user", Registry.getDBUser());
+        props.put("password", Registry.getDBPass());
+
+        Dataset<Row> accounts = spark.read().jdbc(Registry.getDBUrl(), "Accounts", props)
+                .withColumnRenamed("user_id", "userId")
+                .cache();
+        outputs.put("accountsDs", accounts);
+
+        Dataset<Row> buckets = spark.read().jdbc(Registry.getDBUrl(), "Buckets", props)
+                .withColumnRenamed("acct_id", "acctId")
+                .withColumnRenamed("refill_schd", "refillSchedule")
+                .withColumnRenamed("next_refill", "nextRefill")
+                .withColumnRenamed("refill_factor", "refillFactor")
+                .cache();
+        outputs.put("bucketsDs", buckets);
+
+        Dataset<Row> transactions = spark.read().jdbc(Registry.getDBUrl(), "Transactions", props)
+                .withColumnRenamed("tx_date", "txDate")
+                .withColumnRenamed("bucket", "bucketId")
+                .cache();
+        outputs.put("transactionsDs", transactions);
+
+        return outputs;
+    }
+}
