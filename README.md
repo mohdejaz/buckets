@@ -2,10 +2,15 @@
 
 A self-hosted envelope-budgeting web app. Money lives in **accounts**, accounts are divided into **buckets** (budget envelopes like Groceries, Rent, Savings), and every dollar gets refilled into a bucket before it's allowed to be spent — classic envelope budgeting, without spreadsheets.
 
-> **Note:** This app is "vibe coded" — built with an AI coding assistant (Claude) working from this repo owner's directions, iterating feature-by-feature rather than from an upfront spec. It's a personal project, not audited or hardened for production/multi-tenant use. Treat it accordingly if you decide to run it yourself.
+## About
+
+Buckets is a personal, self-hosted budgeting tool built around the envelope method: instead of tracking a single account balance, money is divided into purpose-specific buckets (Groceries, Rent, Savings, etc.), each refilled from a shared Settlement pool on your own schedule. It's designed for a household or a small number of trusted users who want simple, transparent budget tracking without third-party bank syncing, ads, or a subscription — just a Flask app and a SQLite file you control.
+
+It was built iteratively with an AI coding assistant (Claude) rather than from an upfront spec, so it favors "solve the next real problem" over architectural completeness. It hasn't been security-audited or load-tested, and isn't intended for untrusted multi-tenant deployment — treat it as a personal-use tool.
 
 ## Features
 
+- **Dashboard** — at-a-glance totals (balance, bucket count, transaction count, month-to-date spending) plus a quick bucket summary per account.
 - **Accounts & buckets** — organize money into accounts, split each into budget envelopes with per-bucket budgets and refill amounts.
 - **Transactions** — record income/spending against a bucket, post/unpost, soft-delete with restore, or purge permanently.
 - **Refills** — refill a single bucket or all buckets at once from the account's Settlement pool; reset a bucket's balance.
