@@ -731,7 +731,7 @@ const Transactions = {
       .then(data => {
         const t = data.transactions.find(x => x.id === id);
         if (!t) return;
-        this._mode = null;
+        this._mode = (t.amount > 0 && !t.linked_tx_id) ? 'deposit' : null;
         $('txModalTitle').textContent = 'Edit Transaction';
         $('txId').value = t.id;
         $('txDate').value = t.tx_date;
