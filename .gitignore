@@ -61,6 +61,11 @@ local_settings.py
 db.sqlite3
 db.sqlite3-journal
 
+# Buckets app database (contains personal financial data — never commit)
+buckets.db
+buckets.db-journal
+out
+
 # Flask stuff:
 instance/
 .webassets-cache

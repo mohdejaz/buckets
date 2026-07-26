@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Buckets — Budget Manager</title>
+
+  <!-- Bootstrap 5 -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css"/>
+  <!-- Bootstrap Icons -->
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css"/>
+  <!-- Google Fonts -->
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet"/>
+  <!-- Custom CSS -->
+  <link rel="stylesheet" href="/static/css/style.css"/>
+</head>
+<body>
+
+<!-- Mobile sidebar backdrop -->
+<div class="sidebar-backdrop" id="sidebarBackdrop"></div>
+
+<!-- ===================== SIDEBAR ===================== -->
+<div class="app-wrapper">
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <div class="brand">
+        <div class="brand-icon"><i class="bi bi-piggy-bank-fill"></i></div>
+        <div class="brand-text">
+          <span class="brand-name">Buckets</span>
+          <span class="brand-sub">Budget Manager</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Account Selector -->
+    <div class="account-selector px-3 py-2">
+      <label class="selector-label"><i class="bi bi-bank2 me-1"></i>Account</label>
+      <select class="form-select form-select-sm account-select" id="accountSelect">
+        <option value="">— Select account —</option>
+      </select>
+    </div>
+
+    <ul class="nav flex-column sidebar-nav mt-2">
+      <li class="nav-item">
+        <a class="nav-link sidebar-link active" href="#" data-section="dashboard">
+          <i class="bi bi-speedometer2"></i><span>Dashboard</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link sidebar-link" href="#" data-section="accounts">
+          <i class="bi bi-bank2"></i><span>Accounts</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link sidebar-link" href="#" data-section="buckets">
+          <i class="bi bi-bucket-fill"></i><span>Buckets</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link sidebar-link" href="#" data-section="transactions">
+          <i class="bi bi-arrow-left-right"></i><span>Transactions</span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link sidebar-link d-flex align-items-center" href="#" data-section="iou">
+          <i class="bi bi-send-check"></i><span>IOUs</span>
+          <span class="badge bg-danger ms-auto d-none" id="iouSidebarBadge"></span>
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link sidebar-link d-flex align-items-center" href="#" data-section="trash">
+          <i class="bi bi-trash3"></i><span>Trash</span>
+          <span class="badge bg-secondary ms-auto d-none" id="trashSidebarBadge"></span>
+        </a>
+      </li>
+    </ul>
+
+    <!-- Upcoming Expenses (shown only on bucket detail) -->
+    <div id="sidebarUpcoming" class="d-none sidebar-upcoming">
+      <div class="sidebar-upcoming-header">
+        <span><i class="bi bi-clock-history me-1 text-warning"></i>Upcoming</span>
+        <button id="btnNewUpcoming" class="sidebar-upcoming-add" title="Add upcoming expense">
+          <i class="bi bi-plus-circle"></i>
+        </button>
+      </div>
+      <div id="upcomingBody" class="sidebar-upcoming-body"></div>
+      <div class="sidebar-upcoming-footer">
+        Total: <span id="upcomingTotal" class="text-danger fw-semibold">—</span>
+      </div>
+    </div>
+
+    <div class="sidebar-footer">
+      <div class="user-chip mb-2">
+        <i class="bi bi-person-circle"></i>
+        <div class="user-chip-info">
+          <span class="user-chip-name">{{ user_name }}</span>
+          <span class="user-chip-email">{{ user_email }}</span>
+        </div>
+      </div>
+      <div class="d-flex gap-2 mt-1">
+        <button class="btn-logout flex-fill" id="btnChangePasswordSidebar">
+          <i class="bi bi-key me-1"></i>Password
+        </button>
+        <a href="/logout" class="btn-logout flex-fill">
+          <i class="bi bi-box-arrow-right me-1"></i>Sign Out
+        </a>
+      </div>
+    </div>
+  </nav>
+
+  <!-- ===================== MAIN CONTENT ===================== -->
+  <main class="main-content" id="mainContent">
+
+    <!-- Top Bar -->
+    <header class="topbar">
+      <button class="btn btn-link sidebar-toggle" id="sidebarToggle">
+        <i class="bi bi-list fs-4"></i>
+      </button>
+      <div class="topbar-title" id="topbarTitle">Dashboard</div>
+      <div class="topbar-user ms-auto d-flex align-items-center gap-2">
+        <div class="topbar-user-avatar"><i class="bi bi-person-circle"></i></div>
+        <div class="topbar-user-info d-none d-sm-block">
+          <div class="topbar-user-name">{{ user_name }}</div>
+          <div class="topbar-user-email">{{ user_email }}</div>
+        </div>
+        <button class="btn btn-sm btn-outline-primary ms-2" id="btnChangePassword" title="Change Password">
+          <i class="bi bi-key"></i>
+        </button>
+        <a href="/logout" class="btn btn-sm btn-outline-secondary" title="Sign Out">
+          <i class="bi bi-box-arrow-right"></i>
+        </a>
+      </div>
+    </header>
+
+    <!-- ======= DASHBOARD SECTION ======= -->
+    <section class="content-section" id="section-dashboard">
+      <div class="section-header">
+        <h2 class="section-title"><i class="bi bi-speedometer2 me-2"></i>Dashboard</h2>
+      </div>
+
+      <div id="dashboardNoAccount" class="empty-state">
+        <div class="empty-icon"><i class="bi bi-bank2"></i></div>
+        <h5>No account selected</h5>
+        <p class="text-muted">Select or create an account to see your dashboard.</p>
+        <button class="btn btn-primary" onclick="App.nav('accounts')">
+          <i class="bi bi-plus-circle me-1"></i>Manage Accounts
+        </button>
+      </div>
+
+      <div id="dashboardContent" class="d-none">
+        <div class="row g-4 mb-4">
+          <div class="col-sm-6 col-xl-3">
+            <div class="stat-card stat-card--blue">
+              <div class="stat-icon"><i class="bi bi-wallet2"></i></div>
+              <div class="stat-body">
+                <div class="stat-label">Total Balance</div>
+                <div class="stat-value" id="statBalance">—</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-sm-6 col-xl-3">
+            <div class="stat-card stat-card--green">
+              <div class="stat-icon"><i class="bi bi-bucket-fill"></i></div>
+              <div class="stat-body">
+                <div class="stat-label">Buckets</div>
+                <div class="stat-value" id="statBuckets">—</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-sm-6 col-xl-3">
+            <div class="stat-card stat-card--purple">
+              <div class="stat-icon"><i class="bi bi-receipt"></i></div>
+              <div class="stat-body">
+                <div class="stat-label">Transactions</div>
+                <div class="stat-value" id="statTxCount">—</div>
+              </div>
+            </div>
+          </div>
+          <div class="col-sm-6 col-xl-3">
+            <div class="stat-card stat-card--red">
+              <div class="stat-icon"><i class="bi bi-graph-down-arrow"></i></div>
+              <div class="stat-body">
+                <div class="stat-label">Spent This Month</div>
+                <div class="stat-value" id="statSpending">—</div>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Quick Buckets Preview -->
+        <div class="card shadow-sm">
+          <div class="card-header d-flex justify-content-between align-items-center">
+            <span><i class="bi bi-bucket-fill me-2 text-primary"></i>Bucket Summary</span>
+            <button class="btn btn-sm btn-outline-primary" onclick="App.nav('buckets')">
+              View All <i class="bi bi-arrow-right ms-1"></i>
+            </button>
+          </div>
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-hover mb-0">
+                <thead class="table-head">
+                  <tr>
+                    <th>Bucket</th>
+                    <th class="text-end">Budget</th>
+                    <th class="text-end">Balance</th>
+                    <th class="text-end">Usage</th>
+                  </tr>
+                </thead>
+                <tbody id="dashBucketsBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======= ACCOUNTS SECTION ======= -->
+    <section class="content-section d-none" id="section-accounts">
+      <div class="section-header">
+        <h2 class="section-title"><i class="bi bi-bank2 me-2"></i>Accounts</h2>
+        <div class="d-flex gap-2">
+          <button class="btn btn-outline-secondary" id="btnAccountTransfer" title="Move funds between accounts">
+            <i class="bi bi-arrow-left-right me-1"></i>Transfer Funds
+          </button>
+          <button class="btn btn-primary" id="btnNewAccount">
+            <i class="bi bi-plus-circle me-1"></i>New Account
+          </button>
+        </div>
+      </div>
+
+      <div class="card shadow-sm">
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover mb-0" id="accountsTable">
+              <thead class="table-head">
+                <tr>
+                  <th>#</th>
+                  <th>Account Name</th>
+                  <th class="text-end">Balance</th>
+                  <th class="text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="accountsBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card-footer">
+          <div id="accountsPagination"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======= BUCKETS SECTION ======= -->
+    <section class="content-section d-none" id="section-buckets">
+      <div class="section-header">
+        <h2 class="section-title"><i class="bi bi-bucket-fill me-2"></i>Buckets</h2>
+        <div class="d-flex gap-2 flex-wrap">
+          <button class="btn btn-outline-secondary btn-sm" id="btnTransfer" title="Transfer between buckets">
+            <i class="bi bi-arrow-left-right"></i><span class="d-none d-sm-inline ms-1">Transfer</span>
+          </button>
+          <button class="btn btn-outline-success btn-sm" id="btnRefillAll" title="Refill all buckets">
+            <i class="bi bi-plus-circle-fill"></i><span class="d-none d-sm-inline ms-1">Refill All</span>
+          </button>
+          <button class="btn btn-outline-dark btn-sm" id="btnResetBuckets" title="Sweep all bucket balances into Settlement">
+            <i class="bi bi-arrow-counterclockwise"></i><span class="d-none d-sm-inline ms-1">Reset All</span>
+          </button>
+          <button class="btn btn-primary btn-sm" id="btnNewBucket">
+            <i class="bi bi-plus-circle"></i><span class="d-none d-sm-inline ms-1">New Bucket</span>
+          </button>
+        </div>
+      </div>
+
+      <div id="bucketsNoAccount" class="empty-state d-none">
+        <div class="empty-icon"><i class="bi bi-bank2"></i></div>
+        <h5>No account selected</h5>
+        <p class="text-muted">Select an account first to manage buckets.</p>
+      </div>
+
+      <!-- Settlement bucket banner -->
+      <div id="settlementBanner" class="d-none mb-3">
+        <div class="card border-primary shadow-sm">
+          <div class="card-body d-flex align-items-center justify-content-between gap-3 flex-wrap py-3">
+            <div class="d-flex align-items-center gap-3">
+              <div class="text-primary fs-3"><i class="bi bi-bank2"></i></div>
+              <div>
+                <div class="fw-semibold text-primary">Settlement</div>
+                <div class="small text-muted">All deposits go here &middot; Refills draw from this balance</div>
+              </div>
+            </div>
+            <div class="d-flex align-items-center gap-3">
+              <div class="text-end">
+                <div class="small text-muted">Settlement</div>
+                <div class="fw-bold fs-5 font-monospace" id="settlementBalance">$0.00</div>
+              </div>
+              <div class="vr opacity-25"></div>
+              <div class="text-end">
+                <div class="small text-muted">Net Balance</div>
+                <div class="fw-bold fs-5 font-monospace" id="netBalance">$0.00</div>
+              </div>
+              <button class="btn btn-primary btn-sm" id="btnDepositSettlement">
+                <i class="bi bi-plus-circle me-1"></i>Deposit
+              </button>
+              <button class="action-btn action-btn-edit" id="btnEditSettlement" title="View Settlement transactions" onclick="BucketDetail.open(window._settlementBucketId)">
+                <i class="bi bi-eye"></i>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card shadow-sm" id="bucketsCard">
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover mb-0">
+              <thead class="table-head">
+                <tr>
+                  <th>#</th>
+                  <th>Bucket Name</th>
+                  <th class="text-end">Budget</th>
+                  <th class="text-end">Balance</th>
+                  <th class="text-end">Refill MTD</th>
+                  <th class="text-end">Refill Factor</th>
+                  <th class="text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="bucketsBody"></tbody>
+            </table>
+          </div>
+        </div>
+        <div class="card-footer d-flex justify-content-between align-items-center">
+          <div class="text-muted small" id="bucketsInfo"></div>
+          <div id="bucketsMoreWrap" class="d-none">
+            <a href="#" onclick="Buckets.showMore();return false" class="text-decoration-none small fw-medium">
+              More <i class="bi bi-chevron-down ms-1"></i>
+            </a>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======= TRANSACTIONS SECTION ======= -->
+    <section class="content-section d-none" id="section-transactions">
+      <div class="section-header">
+        <h2 class="section-title"><i class="bi bi-arrow-left-right me-2"></i>Transactions</h2>
+        <div class="d-flex gap-2 flex-wrap">
+          <button class="btn btn-primary btn-sm" id="btnTxPageNewTx">
+            <i class="bi bi-dash-circle me-1"></i>Withdraw
+          </button>
+          <button class="btn btn-outline-success btn-sm" id="btnExportTx" title="Export to CSV">
+            <i class="bi bi-download"></i><span class="d-none d-sm-inline ms-1">Export CSV</span>
+          </button>
+        </div>
+      </div>
+
+<div id="txNoAccount" class="empty-state d-none">
+        <div class="empty-icon"><i class="bi bi-bank2"></i></div>
+        <h5>No account selected</h5>
+        <p class="text-muted">Select an account to view transactions.</p>
+      </div>
+
+      <div class="card shadow-sm" id="txCard">
+        <div class="card-body p-0">
+          <table class="table table-hover mb-0">
+            <thead class="table-head">
+              <tr>
+                <th>Date</th>
+                <th>Bucket</th>
+                <th class="text-end">Amount</th>
+                <th>Note</th>
+                <th class="text-center">Posted</th>
+                <th class="text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="txBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="d-flex justify-content-between align-items-center px-1 mt-2">
+        <div class="text-muted small" id="txInfo"></div>
+        <div id="txMoreWrap" class="d-none">
+          <a href="#" onclick="Transactions.loadMore();return false" class="text-decoration-none small fw-medium">
+            More <i class="bi bi-chevron-down ms-1"></i>
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======= BUCKET DETAIL SECTION ======= -->
+    <section class="content-section d-none" id="section-bucket-detail">
+      <div class="section-header">
+        <div class="d-flex align-items-center gap-3">
+          <button class="btn btn-outline-secondary btn-sm" onclick="App.nav('buckets')">
+            <i class="bi bi-arrow-left me-1"></i>Back
+          </button>
+          <h2 class="section-title mb-0" id="bucketDetailTitle">
+            <i class="bi bi-bucket-fill me-2"></i>Bucket
+          </h2>
+        </div>
+        <div class="d-flex gap-2">
+          <button class="btn btn-primary btn-sm" id="btnBucketDetailNewTx">
+            <i class="bi bi-dash-circle me-1"></i>Withdraw
+          </button>
+          <button class="btn btn-outline-success btn-sm d-none" id="btnBucketDetailDeposit">
+            <i class="bi bi-plus-circle me-1"></i>Deposit
+          </button>
+          <button class="btn btn-outline-primary btn-sm d-none" id="btnBucketDetailTransfer">
+            <i class="bi bi-arrow-left-right me-1"></i>Transfer
+          </button>
+        </div>
+      </div>
+
+      <div class="row g-3 mb-4" id="bucketDetailStats"></div>
+
+      <div class="card shadow-sm">
+        <div class="card-body p-0">
+          <table class="table table-hover mb-0">
+            <thead class="table-head">
+              <tr>
+                <th>Date</th>
+                <th>Note</th>
+                <th class="text-end">Amount</th>
+                <th class="text-end">Balance</th>
+                <th class="text-center">Posted</th>
+                <th class="text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="bucketDetailBody"></tbody>
+          </table>
+        </div>
+      </div>
+      <div class="d-flex justify-content-between align-items-center px-1 mt-2">
+        <div class="text-muted small" id="bucketDetailInfo"></div>
+        <div id="bucketDetailMoreWrap" class="d-none">
+          <a href="#" onclick="BucketDetail.showMore();return false" class="text-decoration-none small fw-medium">
+            More <i class="bi bi-chevron-down ms-1"></i>
+          </a>
+        </div>
+      </div>
+
+    </section>
+
+    <!-- ======= IOU SECTION ======= -->
+    <section class="content-section d-none" id="section-iou">
+      <div class="section-header">
+        <h2 class="section-title"><i class="bi bi-send-check me-2"></i>IOUs</h2>
+        <button class="btn btn-primary btn-sm" id="btnNewIou">
+          <i class="bi bi-plus-circle me-1"></i>Request Payment
+        </button>
+      </div>
+
+      <ul class="nav nav-pills mb-3">
+        <li class="nav-item">
+          <button class="nav-link active" data-iou-tab="sent">
+            <i class="bi bi-arrow-up-right-circle me-1"></i>Sent
+            <span class="badge bg-secondary ms-1" id="iouBadgeSent">0</span>
+          </button>
+        </li>
+        <li class="nav-item">
+          <button class="nav-link" data-iou-tab="received">
+            <i class="bi bi-arrow-down-left-circle me-1"></i>Received
+            <span class="badge bg-danger ms-1" id="iouBadgeReceived">0</span>
+          </button>
+        </li>
+      </ul>
+
+      <div id="iouSentPanel">
+        <div class="card shadow-sm">
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-hover mb-0">
+                <thead class="table-head">
+                  <tr>
+                    <th>To</th>
+                    <th class="text-end">Amount</th>
+                    <th>Description</th>
+                    <th class="d-none d-md-table-cell">Due</th>
+                    <th class="text-center">Status</th>
+                    <th class="text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="iouSentBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div id="iouReceivedPanel" class="d-none">
+        <div class="card shadow-sm">
+          <div class="card-body p-0">
+            <div class="table-responsive">
+              <table class="table table-hover mb-0">
+                <thead class="table-head">
+                  <tr>
+                    <th>From</th>
+                    <th class="text-end">Amount</th>
+                    <th>Description</th>
+                    <th class="d-none d-md-table-cell">Due</th>
+                    <th class="text-center">Status</th>
+                    <th class="text-center">Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="iouReceivedBody"></tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ======= TRASH SECTION ======= -->
+    <section class="content-section d-none" id="section-trash">
+      <div class="section-header">
+        <h2 class="section-title"><i class="bi bi-trash3 me-2"></i>Deleted Transactions</h2>
+        <div class="d-flex gap-2">
+          <button class="btn btn-outline-danger btn-sm d-none" id="btnPurgeSelected">
+            <i class="bi bi-trash3-fill me-1"></i>Purge Selected
+          </button>
+          <button class="btn btn-danger btn-sm" id="btnPurgeAll">
+            <i class="bi bi-trash3-fill me-1"></i>Purge All
+          </button>
+        </div>
+      </div>
+
+      <div id="trashNoAccount" class="empty-state d-none">
+        <div class="empty-icon"><i class="bi bi-bank2"></i></div>
+        <h5>No account selected</h5>
+        <p class="text-muted">Select an account to view deleted transactions.</p>
+      </div>
+
+      <div class="card shadow-sm" id="trashCard">
+        <div class="card-body p-0">
+          <table class="table table-hover mb-0">
+            <thead class="table-head">
+              <tr>
+                <th class="text-center" style="width:2.5rem">
+                  <input type="checkbox" class="form-check-input" id="trashSelectAll" onchange="Trash._toggleAll(this)"/>
+                </th>
+                <th>Date</th>
+                <th>Bucket</th>
+                <th class="text-end">Amount</th>
+                <th>Note</th>
+                <th class="text-center">Actions</th>
+              </tr>
+            </thead>
+            <tbody id="trashBody"></tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<!-- ===================== MODALS ===================== -->
+
+<!-- Account Modal -->
+<div class="modal fade" id="accountModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-bank2 me-2"></i><span id="accountModalTitle">New Account</span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="accountForm" novalidate>
+          <input type="hidden" id="accountId"/>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Account Name <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="accountName" placeholder="e.g. Checking, Savings…" required/>
+            <div class="invalid-feedback">Please enter an account name.</div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btnSaveAccount">
+          <i class="bi bi-check-circle me-1"></i>Save
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Bucket Modal -->
+<div class="modal fade" id="bucketModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-bucket-fill me-2"></i><span id="bucketModalTitle">New Bucket</span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="bucketForm" novalidate>
+          <input type="hidden" id="bucketId"/>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Bucket Name <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="bucketName" placeholder="e.g. Groceries, Rent…" required/>
+            <div class="invalid-feedback">Please enter a bucket name.</div>
+          </div>
+          <div class="row g-3">
+            <div class="col-6">
+              <label class="form-label fw-semibold">Budget</label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                <input type="number" class="form-control" id="bucketBudget" step="0.01" min="0" value="0"/>
+              </div>
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">Refill Factor</label>
+              <input type="number" class="form-control" id="bucketRefillFactor" step="0.01" min="0" max="10" value="1.0"/>
+              <div class="form-text">e.g. 0.5 = refill half the budget</div>
+            </div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btnSaveBucket">
+          <i class="bi bi-check-circle me-1"></i>Save
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Transfer Modal -->
+<div class="modal fade" id="transferModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-arrow-left-right me-2"></i>Transfer Between Buckets</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="transferForm" novalidate>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">From Bucket <span class="text-danger">*</span></label>
+            <select class="form-select" id="transferFrom" required></select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">To Bucket <span class="text-danger">*</span></label>
+            <select class="form-select" id="transferTo" required></select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Amount <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <span class="input-group-text">$</span>
+              <input type="number" class="form-control" id="transferAmount" step="0.01" min="0.01" required/>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Date <span class="text-danger">*</span></label>
+            <input type="date" class="form-control" id="transferDate" required/>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Note</label>
+            <input type="text" class="form-control" id="transferNote" placeholder="Optional note"/>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btnSaveTransfer">
+          <i class="bi bi-arrow-left-right me-1"></i>Transfer
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Account Transfer Modal -->
+<div class="modal fade" id="accountTransferModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-arrow-left-right me-2"></i>Transfer Between Accounts</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="small text-muted">Funds move from the source account's Settlement bucket into the destination account's Settlement bucket.</p>
+        <form id="accountTransferForm" novalidate>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">From Account <span class="text-danger">*</span></label>
+            <select class="form-select" id="acctTransferFrom" required></select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">To Account <span class="text-danger">*</span></label>
+            <select class="form-select" id="acctTransferTo" required></select>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Amount <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <span class="input-group-text">$</span>
+              <input type="number" class="form-control" id="acctTransferAmount" step="0.01" min="0.01" required/>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Date <span class="text-danger">*</span></label>
+            <input type="date" class="form-control" id="acctTransferDate" required/>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Note</label>
+            <input type="text" class="form-control" id="acctTransferNote" placeholder="Optional note"/>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btnSaveAccountTransfer">
+          <i class="bi bi-arrow-left-right me-1"></i>Transfer
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Transaction Modal -->
+<div class="modal fade" id="txModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-receipt me-2"></i><span id="txModalTitle">New Transaction</span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="txForm" novalidate>
+          <input type="hidden" id="txId"/>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Date <span class="text-danger">*</span></label>
+            <input type="date" class="form-control" id="txDate" required/>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Bucket <span class="text-danger">*</span></label>
+            <select class="form-select" id="txBucket" required>
+              <option value="">— Select bucket —</option>
+            </select>
+            <div class="invalid-feedback">Please select a bucket.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Amount <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <span class="input-group-text">$</span>
+              <input type="number" class="form-control" id="txAmount" step="0.01" required/>
+            </div>
+            <div class="form-text" id="txAmountHint">Use negative for expenses (e.g. -25.00)</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Note</label>
+            <input type="text" class="form-control" id="txNote" placeholder="Description…"/>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btnSaveTx">
+          <i class="bi bi-check-circle me-1"></i>Save
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Confirm Modal -->
+<div class="modal fade" id="confirmModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+      <div class="modal-header border-0">
+        <h5 class="modal-title text-danger"><i class="bi bi-exclamation-triangle-fill me-2"></i>Confirm</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body pt-0" id="confirmMessage">Are you sure?</div>
+      <div class="modal-footer border-0">
+        <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-danger btn-sm" id="btnConfirmOk">
+          <i class="bi bi-trash me-1"></i>Delete
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast-container position-fixed bottom-0 end-0 p-3" style="z-index:9999">
+  <div id="appToast" class="toast align-items-center text-bg-success border-0" role="alert">
+    <div class="d-flex">
+      <div class="toast-body" id="toastMessage">Done!</div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<!-- Change Password Modal -->
+<div class="modal fade" id="changePasswordModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-key me-2"></i>Change Password</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="changePasswordForm" novalidate>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Current Password <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <span class="input-group-text"><i class="bi bi-lock"></i></span>
+              <input type="password" class="form-control" id="cpCurrent" placeholder="Enter current password" required/>
+            </div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">New Password <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <span class="input-group-text"><i class="bi bi-lock-fill"></i></span>
+              <input type="password" class="form-control" id="cpNew" placeholder="At least 6 characters" required minlength="6"
+                     oninput="cpCheckMatch()"/>
+            </div>
+          </div>
+          <div class="mb-1">
+            <label class="form-label fw-semibold">Confirm New Password <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <span class="input-group-text"><i class="bi bi-lock-fill"></i></span>
+              <input type="password" class="form-control" id="cpConfirm" placeholder="Repeat new password" required
+                     oninput="cpCheckMatch()"/>
+            </div>
+            <div class="form-text text-danger d-none" id="cpMismatch">Passwords do not match.</div>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btnSavePassword">
+          <i class="bi bi-check-circle me-1"></i>Update Password
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Upcoming Expense Modal -->
+<div class="modal fade" id="upcomingModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-clock-history me-2"></i><span id="upcomingModalTitle">New Upcoming Expense</span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="upcomingForm" novalidate>
+          <input type="hidden" id="upcomingId"/>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Description <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="upcomingDesc" placeholder="e.g. Timing belt replacement for Odyssey" required/>
+            <div class="invalid-feedback">Please enter a description.</div>
+          </div>
+          <div class="row g-3">
+            <div class="col-6">
+              <label class="form-label fw-semibold">Estimated Amount</label>
+              <div class="input-group">
+                <span class="input-group-text">$</span>
+                <input type="number" class="form-control" id="upcomingAmount" step="0.01" min="0" value="0"/>
+              </div>
+            </div>
+            <div class="col-6">
+              <label class="form-label fw-semibold">Due Date</label>
+              <input type="date" class="form-control" id="upcomingDueDate"/>
+            </div>
+          </div>
+          <div class="mb-0 mt-3">
+            <label class="form-label fw-semibold">Notes</label>
+            <textarea class="form-control" id="upcomingNotes" rows="2" placeholder="Optional details…"></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btnSaveUpcoming">
+          <i class="bi bi-check-circle me-1"></i>Save
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- IOU Request Modal -->
+<div class="modal fade" id="iouModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-send-check me-2"></i>Request Payment</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="iouForm" novalidate>
+          <input type="hidden" id="iouPayeeId"/>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Payee Email <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <input type="email" class="form-control" id="iouPayeeEmail" placeholder="Enter their email address" required/>
+              <button class="btn btn-outline-secondary" type="button" id="btnLookupPayee">
+                <i class="bi bi-search"></i>
+              </button>
+            </div>
+            <div class="form-text" id="iouPayeeName"></div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Amount <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <span class="input-group-text">$</span>
+              <input type="number" class="form-control" id="iouAmount" step="0.01" min="0.01" required/>
+            </div>
+            <div class="invalid-feedback">Please enter a positive amount.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Description <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="iouDesc" placeholder="e.g. Dinner split, concert tickets…" required/>
+            <div class="invalid-feedback">Please enter a description.</div>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold">Due Date</label>
+            <input type="date" class="form-control" id="iouDueDate"/>
+          </div>
+          <div class="mb-0">
+            <label class="form-label fw-semibold">Notes</label>
+            <textarea class="form-control" id="iouNotes" rows="2" placeholder="Optional details…"></textarea>
+          </div>
+        </form>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-primary" id="btnSaveIou">
+          <i class="bi bi-send me-1"></i>Send Request
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- IOU Link Transaction Modal -->
+<div class="modal fade" id="iouLinkModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-lg">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-link-45deg me-2"></i>Link a Transaction</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3">Select one of your transactions to attach as evidence of payment. This is for record-keeping only — no balances are changed.</p>
+        <div class="mb-3">
+          <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-search"></i></span>
+            <input type="text" class="form-control" id="iouLinkSearch" placeholder="Search by note…"/>
+          </div>
+        </div>
+        <div class="table-responsive" style="max-height:340px;overflow-y:auto;">
+          <table class="table table-hover table-sm mb-0">
+            <thead class="table-head sticky-top">
+              <tr>
+                <th>Date</th>
+                <th>Bucket</th>
+                <th class="text-end">Amount</th>
+                <th>Note</th>
+                <th class="text-center">Select</th>
+              </tr>
+            </thead>
+            <tbody id="iouLinkTxBody"></tbody>
+          </table>
+        </div>
+        <div id="iouLinkPagination" class="mt-2"></div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- IOU Detail Modal -->
+<div class="modal fade" id="iouDetailModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-info-circle me-2"></i>IOU Details</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body" id="iouDetailBody"></div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Bootstrap JS -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<!-- App JS -->
+<script src="/static/js/app.js"></script>
+</body>
+</html>
