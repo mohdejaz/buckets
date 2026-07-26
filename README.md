@@ -51,15 +51,15 @@ The seeded starter login is:
 - **Email:** `demo@example.com`
 - **Password:** `changeme123`
 
-Override these before first run with environment variables if you'd like different seed credentials:
+**After setup, sign up for your own account from the login page** rather than using the seeded one for real data — the demo credentials are public (they're in this README), so anyone with access to your instance could log into that account. Once you've signed up, you can ignore or delete the seeded demo account entirely.
+
+If you'd rather not have the demo account seeded at all, override its credentials before first run with environment variables:
 
 ```bash
 export BUCKETS_DEFAULT_NAME=yourname
 export BUCKETS_DEFAULT_EMAIL=you@example.com
 export BUCKETS_DEFAULT_PASSWORD=your-password
 ```
-
-Change the password from the app after logging in either way. You can also just sign up for a brand-new account from the login page and ignore the seeded one entirely.
 
 ### Quick-start scripts
 
