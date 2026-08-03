@@ -339,6 +339,8 @@ const Buckets = {
       noAcct.classList.remove('d-none');
       card.classList.add('d-none');
       banner.classList.add('d-none');
+      const txNetElEmpty = $('txNetBalance');
+      if (txNetElEmpty) txNetElEmpty.textContent = fmt(0);
       return;
     }
     noAcct.classList.add('d-none');
@@ -352,12 +354,26 @@ const Buckets = {
       balEl.textContent = fmt(settlement.balance);
       balEl.className = `fw-bold fs-5 font-monospace ${balClass(settlement.balance)}`;
 
+      const totalVal = State.buckets.filter(b => !b.is_settlement)
+        .reduce((sum, b) => sum + parseFloat(b.balance), 0);
+      const totalEl = $('totalBucketBalance');
+      totalEl.textContent = fmt(totalVal);
+      totalEl.className = `fw-bold fs-5 font-monospace ${balClass(totalVal)}`;
+
       const netVal = State.buckets.reduce((sum, b) => sum + parseFloat(b.balance), 0);
       const netEl = $('netBalance');
       netEl.textContent = fmt(netVal);
       netEl.className = `fw-bold fs-5 font-monospace ${balClass(netVal)}`;
+
+      const txNetEl = $('txNetBalance');
+      if (txNetEl) {
+        txNetEl.textContent = fmt(netVal);
+        txNetEl.className = `fw-bold fs-5 font-monospace ${balClass(netVal)}`;
+      }
     } else {
       banner.classList.add('d-none');
+      const txNetEl = $('txNetBalance');
+      if (txNetEl) txNetEl.textContent = fmt(0);
     }
 
     // Regular (non-settlement) buckets in the table
