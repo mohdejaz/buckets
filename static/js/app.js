@@ -673,7 +673,7 @@ const Transactions = {
     const rows = data.transactions || [];
 
     if (!rows.length) {
-      body.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-4">
+      body.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-4">
         <i class="bi bi-receipt fs-2 d-block mb-2 opacity-25"></i>No transactions found.</td></tr>`;
     } else {
       const html = rows.map(t => {
@@ -688,6 +688,7 @@ const Transactions = {
           <td class="text-muted font-monospace" style="font-size:.82rem">${t.tx_date}</td>
           <td><span class="badge bg-light text-secondary border" style="font-size:.75rem">${esc(t.bucket)}</span>${t.linked_tx_id ? ' <span class="badge bg-secondary" style="font-size:.7rem">Transfer</span>' : ''}</td>
           <td class="text-end font-monospace ${amtClass(t.amount)}">${fmt(t.amount, true)}</td>
+          <td class="text-end font-monospace ${balClass(t.balance)}">${fmt(t.balance)}</td>
           <td class="text-muted" style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.note)}</td>
           <td class="text-center">${posted}</td>
           <td class="text-center" style="white-space:nowrap">

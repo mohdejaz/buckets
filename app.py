@@ -845,8 +845,19 @@ def get_transactions():
                 params + [per_page, offset],
             ).fetchall()
 
-            transactions = [
-                {
+            skipped_sum = 0.0
+            if offset > 0:
+                skipped_sum = _fmt(conn.execute(
+                    "SELECT COALESCE(SUM(amount),0) FROM (SELECT t.amount "
+                    + base_sql
+                    + " ORDER BY t.tx_date DESC, t.id DESC LIMIT ?)",
+                    params + [offset],
+                ).fetchone()[0])
+            running = _fmt(_account_balance(conn, acct_id) - skipped_sum)
+
+            transactions = []
+            for r in rows:
+                transactions.append({
                     'id':           r['id'],
                     'tx_date':      r['tx_date'],
                     'bucket':       r['bucket'],
@@ -855,9 +866,9 @@ def get_transactions():
                     'note':         r['note'] or '',
                     'posted':       bool(r['posted']),
                     'linked_tx_id': r['linked_tx_id'],
-                }
-                for r in rows
-            ]
+                    'balance':      running,
+                })
+                running = _fmt(running - _fmt(r['amount']))
 
         pages = max(1, (total + per_page - 1) // per_page)
         return jsonify({
