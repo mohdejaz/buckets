@@ -688,7 +688,7 @@ const Transactions = {
           <td class="text-muted font-monospace" style="font-size:.82rem">${t.tx_date}</td>
           <td style="max-width:200px">
             <div><span class="badge bg-light text-secondary border" style="font-size:.75rem">${esc(t.bucket)}</span>${t.linked_tx_id ? ' <span class="badge bg-secondary" style="font-size:.7rem">Transfer</span>' : ''}</div>
-            ${t.note ? `<div class="text-muted small text-truncate" style="max-width:200px">${esc(t.note)}</div>` : ''}
+            ${t.note ? `<div class="text-muted small text-truncate mt-1" style="max-width:200px">${esc(t.note)}</div>` : ''}
           </td>
           <td class="text-end font-monospace ${amtClass(t.amount)}">${fmt(t.amount, true)}</td>
           <td class="text-end font-monospace ${balClass(t.balance)}">${fmt(t.balance)}</td>
