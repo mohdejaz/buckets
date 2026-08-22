@@ -116,6 +116,13 @@ def init_db():
         )
         conn.commit()
 
+    # ── Schema migration: add archived to buckets ────────────────────────────
+    if 'archived' not in bkt_cols:
+        cur.execute(
+            "ALTER TABLE buckets ADD COLUMN archived INTEGER NOT NULL DEFAULT 0"
+        )
+        conn.commit()
+
     # ── Schema migration: add linked_tx_id / deleted to transactions ─────────
     tx_cols = [r[1] for r in cur.execute("PRAGMA table_info(transactions)").fetchall()]
     if 'deleted' not in tx_cols:

@@ -342,13 +342,15 @@ def delete_account(acct_id):
 @login_required
 def get_buckets():
     acct_id = request.args.get('acct_id', type=int)
+    include_archived = request.args.get('include_archived', type=int)
     if not acct_id:
         return jsonify([])
     try:
         with db_conn() as conn:
+            archived_filter = "" if include_archived else " AND archived=0"
             rows = conn.execute(
-                """SELECT id, name, budget, acct_id, refill_factor, is_settlement
-                   FROM buckets WHERE acct_id=? ORDER BY name""",
+                """SELECT id, name, budget, acct_id, refill_factor, is_settlement, archived
+                   FROM buckets WHERE acct_id=?""" + archived_filter + " ORDER BY name",
                 (acct_id,),
             ).fetchall()
             buckets = []
@@ -361,6 +363,7 @@ def get_buckets():
                     'acct_id': r['acct_id'],
                     'refill_factor': _fmt(r['refill_factor']),
                     'is_settlement': bool(r['is_settlement']),
+                    'archived': bool(r['archived']),
                     'balance': balance,
                     'refill_mtd': refill_mtd,
                     'prev_balance': prev_balance,
@@ -443,6 +446,54 @@ def delete_bucket(bkt_id):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/buckets/<int:bkt_id>/archive', methods=['POST'])
+@login_required
+def archive_bucket(bkt_id):
+    try:
+        with db_conn() as conn:
+            row = conn.execute(
+                """SELECT b.id, b.is_settlement FROM buckets b
+                   JOIN accounts a ON a.id = b.acct_id
+                   WHERE b.id=? AND a.user_id=?""",
+                (bkt_id, current_user_id()),
+            ).fetchone()
+            if not row:
+                return jsonify({'error': 'Bucket not found'}), 404
+            if row['is_settlement']:
+                return jsonify({'error': 'The Settlement bucket cannot be archived'}), 400
+            balance = _fmt(conn.execute(
+                "SELECT COALESCE(SUM(amount),0) FROM transactions WHERE bucket_id=? AND deleted=0",
+                (bkt_id,),
+            ).fetchone()[0])
+            if balance != 0:
+                return jsonify({'error': f'Empty the bucket before archiving (balance ${balance:.2f})'}), 400
+            conn.execute("UPDATE buckets SET archived=1 WHERE id=?", (bkt_id,))
+            conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/buckets/<int:bkt_id>/unarchive', methods=['POST'])
+@login_required
+def unarchive_bucket(bkt_id):
+    try:
+        with db_conn() as conn:
+            row = conn.execute(
+                """SELECT b.id FROM buckets b
+                   JOIN accounts a ON a.id = b.acct_id
+                   WHERE b.id=? AND a.user_id=?""",
+                (bkt_id, current_user_id()),
+            ).fetchone()
+            if not row:
+                return jsonify({'error': 'Bucket not found'}), 404
+            conn.execute("UPDATE buckets SET archived=0 WHERE id=?", (bkt_id,))
+            conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/buckets/<int:bkt_id>/transactions')
 @login_required
 def get_bucket_transactions(bkt_id):
@@ -500,10 +551,12 @@ def refill_bucket(bkt_id):
     try:
         with db_conn() as conn:
             row = conn.execute(
-                "SELECT b.budget, b.refill_factor, b.acct_id FROM buckets b WHERE b.id=?", (bkt_id,)
+                "SELECT b.budget, b.refill_factor, b.acct_id, b.archived FROM buckets b WHERE b.id=?", (bkt_id,)
             ).fetchone()
             if not row:
                 return jsonify({'error': 'Bucket not found'}), 404
+            if row['archived']:
+                return jsonify({'error': 'Cannot refill an archived bucket'}), 400
             settlement = conn.execute(
                 "SELECT id FROM buckets WHERE acct_id=? AND is_settlement=1", (row['acct_id'],)
             ).fetchone()
@@ -543,7 +596,7 @@ def refill_all_buckets():
                 "SELECT id FROM buckets WHERE acct_id=? AND is_settlement=1", (acct_id,)
             ).fetchone()
             buckets = conn.execute(
-                "SELECT id, budget, refill_factor FROM buckets WHERE acct_id=? AND budget > 0 AND is_settlement=0",
+                "SELECT id, budget, refill_factor FROM buckets WHERE acct_id=? AND budget > 0 AND is_settlement=0 AND archived=0",
                 (acct_id,)
             ).fetchall()
             total = _fmt(sum(_fmt(b['budget'] * b['refill_factor']) for b in buckets))
@@ -589,7 +642,7 @@ def reset_buckets():
                 return jsonify({'error': 'No Settlement bucket for this account'}), 400
             settlement_id = settlement['id']
             buckets = conn.execute(
-                "SELECT id FROM buckets WHERE acct_id=? AND is_settlement=0", (acct_id,)
+                "SELECT id FROM buckets WHERE acct_id=? AND is_settlement=0 AND archived=0", (acct_id,)
             ).fetchall()
             today = date.today().isoformat()
             swept = 0.0
@@ -632,6 +685,11 @@ def transfer():
         return jsonify({'error': 'Cannot transfer to the same bucket'}), 400
     try:
         with db_conn() as conn:
+            archived = conn.execute(
+                "SELECT COUNT(*) FROM buckets WHERE id IN (?,?) AND archived=1", (from_id, to_id)
+            ).fetchone()[0]
+            if archived:
+                return jsonify({'error': 'Cannot transfer to or from an archived bucket'}), 400
             from_balance = _fmt(conn.execute(
                 "SELECT COALESCE(SUM(amount),0) FROM transactions WHERE bucket_id=? AND deleted=0", (from_id,)
             ).fetchone()[0])
@@ -896,6 +954,11 @@ def create_transaction():
         with db_conn() as conn:
             if amount == 0:
                 return jsonify({'error': 'Amount cannot be zero.'}), 400
+            archived = conn.execute(
+                "SELECT archived FROM buckets WHERE id=?", (bucket_id,)
+            ).fetchone()
+            if archived and archived['archived']:
+                return jsonify({'error': 'Cannot add a transaction to an archived bucket'}), 400
             if amount < 0:
                 balance = _fmt(conn.execute(
                     "SELECT COALESCE(SUM(amount),0) FROM transactions WHERE bucket_id=? AND deleted=0", (bucket_id,)
@@ -933,6 +996,11 @@ def update_transaction(tx_id):
         with db_conn() as conn:
             if amount == 0:
                 return jsonify({'error': 'Amount cannot be zero.'}), 400
+            archived = conn.execute(
+                "SELECT archived FROM buckets WHERE id=?", (bucket_id,)
+            ).fetchone()
+            if archived and archived['archived']:
+                return jsonify({'error': 'Cannot add a transaction to an archived bucket'}), 400
             if amount < 0:
                 balance = _fmt(conn.execute(
                     "SELECT COALESCE(SUM(amount),0) FROM transactions WHERE bucket_id=? AND id!=? AND deleted=0",
@@ -1185,7 +1253,7 @@ def summary():
         with db_conn() as conn:
             total_balance = _account_balance(conn, acct_id)
             bucket_count  = conn.execute(
-                "SELECT COUNT(*) FROM buckets WHERE acct_id=?", (acct_id,)
+                "SELECT COUNT(*) FROM buckets WHERE acct_id=? AND archived=0", (acct_id,)
             ).fetchone()[0]
             tx_count = conn.execute(
                 """SELECT COUNT(*) FROM transactions t

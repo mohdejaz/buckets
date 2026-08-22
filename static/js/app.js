@@ -113,6 +113,7 @@ const State = {
   accountId: null,
   accounts: [],
   buckets: [],
+  archivedBuckets: [],
   lastTxDate: null,
   accountPage: 1,
   accountsPerPage: 10,
@@ -311,20 +312,26 @@ const Buckets = {
     $('btnDepositSettlement').addEventListener('click', () => {
       if (State.settlementBucketId) Transactions.openNew(State.settlementBucketId);
     });
+    $('toggleArchived').addEventListener('change', () => this.renderArchived());
   },
 
   async load() {
     if (!State.accountId) {
       State.buckets = [];
+      State.archivedBuckets = [];
       this.render();
+      this.renderArchived();
       return;
     }
     try {
-      State.buckets = await api('GET', `/api/buckets?acct_id=${State.accountId}`);
+      const all = await api('GET', `/api/buckets?acct_id=${State.accountId}&include_archived=1`);
+      State.buckets = all.filter(b => !b.archived);
+      State.archivedBuckets = all.filter(b => b.archived);
       const settlement = State.buckets.find(b => b.is_settlement);
       State.settlementBucketId = settlement ? settlement.id : null;
       window._settlementBucketId = State.settlementBucketId;
       this.render();
+      this.renderArchived();
       this.populateBucketSelects();
     } catch (e) { showError(e.message); }
   },
@@ -423,6 +430,9 @@ const Buckets = {
           </button>
           <button class="action-btn action-btn-edit me-1" onclick="Buckets.openEdit(${b.id})" title="Edit">
             <i class="bi bi-pencil"></i>
+          </button>
+          <button class="action-btn action-btn-edit me-1" onclick="Buckets.archive(${b.id})" title="Archive">
+            <i class="bi bi-archive"></i>
           </button>
           <button class="action-btn action-btn-delete" onclick="Buckets.delete(${b.id})" title="Delete">
             <i class="bi bi-trash"></i>
@@ -535,6 +545,54 @@ const Buckets = {
       toast('Bucket deleted');
       await this.load();
     } catch (e) { showError(e.message); }
+  },
+
+  async archive(id) {
+    const b = State.buckets.find(x => x.id === id);
+    const ok = await confirm(`Archive bucket "${b?.name}"? It will be hidden and frozen — no refills, transfers, or transactions.`, 'Archive', false);
+    if (!ok) return;
+    try {
+      await api('POST', `/api/buckets/${id}/archive`);
+      toast('Bucket archived');
+      await this.load();
+      if (State.currentSection === 'dashboard') Dashboard.load();
+    } catch (e) { showError(e.message); }
+  },
+
+  async unarchive(id) {
+    const b = State.archivedBuckets.find(x => x.id === id);
+    const ok = await confirm(`Unarchive bucket "${b?.name}"?`, 'Unarchive', false);
+    if (!ok) return;
+    try {
+      await api('POST', `/api/buckets/${id}/unarchive`);
+      toast('Bucket restored');
+      await this.load();
+      if (State.currentSection === 'dashboard') Dashboard.load();
+    } catch (e) { showError(e.message); }
+  },
+
+  renderArchived() {
+    const card = $('archivedBucketsCard');
+    const body = $('archivedBucketsBody');
+    const show = $('toggleArchived').checked;
+    const rows = (State.archivedBuckets || []).filter(b => !b.is_settlement);
+    if (!show || !rows.length) {
+      card.classList.add('d-none');
+      body.innerHTML = '';
+      return;
+    }
+    card.classList.remove('d-none');
+    body.innerHTML = rows.map(b => `
+      <tr class="text-muted">
+        <td>${esc(b.name)}</td>
+        <td class="text-end font-monospace">${fmt(b.budget)}</td>
+        <td class="text-end font-monospace ${balClass(b.balance)}">${fmt(b.balance)}</td>
+        <td class="text-center">
+          <button class="action-btn action-btn-edit" onclick="Buckets.unarchive(${b.id})" title="Unarchive">
+            <i class="bi bi-arrow-counterclockwise"></i>
+          </button>
+        </td>
+      </tr>`).join('');
   },
 
   openTransfer(fromId = null, toId = null) {
