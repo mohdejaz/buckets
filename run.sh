@@ -6,4 +6,5 @@ cd "$(dirname "$0")"
 HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-8080}"
 echo "Starting Buckets on http://${HOST}:${PORT}"
-venv/bin/flask --app app run --host "$HOST" --port "$PORT"
+# venv/bin/flask --app app run --host "$HOST" --port "$PORT"
+venv/bin/gunicorn --bind "${HOST}:${PORT}" app:app
