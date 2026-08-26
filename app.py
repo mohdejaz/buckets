@@ -13,7 +13,23 @@ from database import db_conn, init_db
 
 app = Flask(__name__)
 
-app.secret_key = secrets.token_hex(32)
+# Session cookies are signed with this key. It MUST stay stable across restarts
+# (a new key logs everyone out) and secret. Set BUCKETS_SECRET_KEY in the VM's
+# environment in production; the random fallback is dev-only.
+app.secret_key = os.environ.get('BUCKETS_SECRET_KEY')
+if not app.secret_key:
+    print("[WARN] BUCKETS_SECRET_KEY not set — using a random key. "
+          "Sessions will reset on restart. Set it in production.")
+    app.secret_key = secrets.token_hex(32)
+
+app.config.update(
+    SESSION_COOKIE_HTTPONLY=True,
+    SESSION_COOKIE_SAMESITE='Lax',
+    # Only send the cookie over HTTPS. Enable in production (behind TLS/Cloudflare)
+    # via BUCKETS_SECURE_COOKIES=1; leave off for plain-HTTP local dev.
+    SESSION_COOKIE_SECURE=os.environ.get('BUCKETS_SECURE_COOKIES', '').lower()
+        in ('1', 'true', 'yes'),
+)
 
 
 # ---------------------------------------------------------------------------
@@ -51,7 +67,8 @@ def login():
         try:
             with db_conn() as conn:
                 user = conn.execute(
-                    "SELECT id, name, email, passwd FROM users WHERE LOWER(email)=?",
+                    "SELECT id, name, email, passwd, must_change_password "
+                    "FROM users WHERE LOWER(email)=?",
                     (email,)
                 ).fetchone()
             if user and check_password_hash(user['passwd'], passwd):
@@ -59,6 +76,7 @@ def login():
                 session['user_id']    = user['id']
                 session['user_name']  = user['name']
                 session['user_email'] = user['email']
+                session['must_change_password'] = bool(user['must_change_password'])
                 return redirect(url_for('index'))
             error = 'Invalid email or password.'
         except Exception as e:
@@ -67,83 +85,33 @@ def login():
     return render_template('login.html', error=error)
 
 
-@app.route('/signup', methods=['GET', 'POST'])
-def signup():
-    if 'user_id' in session:
-        return redirect(url_for('index'))
-
-    error = None
-    if request.method == 'POST':
-        name   = (request.form.get('name') or '').strip()
-        email  = (request.form.get('email') or '').strip().lower()
-        passwd = request.form.get('password') or ''
-
-        if not name or not email or not passwd:
-            error = 'All fields are required.'
-        elif len(passwd) < 6:
-            error = 'Password must be at least 6 characters.'
-        else:
-            try:
-                with db_conn() as conn:
-                    exists = conn.execute(
-                        "SELECT id FROM users WHERE LOWER(email)=?", (email,)
-                    ).fetchone()
-                    if exists:
-                        error = 'An account with that email already exists.'
-                    else:
-                        cur = conn.execute(
-                            "INSERT INTO users (name, email, passwd) VALUES (?,?,?)",
-                            (name, email, generate_password_hash(passwd)),
-                        )
-                        conn.commit()
-                        session.clear()
-                        session['user_id']    = cur.lastrowid
-                        session['user_name']  = name
-                        session['user_email'] = email
-                        return redirect(url_for('index'))
-            except Exception as e:
-                error = f'Sign-up failed: {e}'
-
-    return render_template('signup.html', error=error)
+# Signup is intentionally disabled — this is an invite-only deployment.
+# Accounts are provisioned from the VM with `python manage_users.py add …`,
+# which also handles password resets. There is no public self-service path.
 
 
-@app.route('/reset-password', methods=['GET', 'POST'])
-def reset_password():
-    if 'user_id' in session:
-        return redirect(url_for('index'))
+@app.route('/change-password')
+@login_required
+def change_password_page():
+    """Standalone page used to force a password change on first login."""
+    return render_template(
+        'change_password.html',
+        forced=bool(session.get('must_change_password')),
+        user_name=session.get('user_name', ''),
+    )
 
-    error   = None
-    success = None
-    if request.method == 'POST':
-        email   = (request.form.get('email') or '').strip().lower()
-        new_pwd = request.form.get('password') or ''
-        confirm = request.form.get('confirm') or ''
 
-        if not email or not new_pwd or not confirm:
-            error = 'All fields are required.'
-        elif len(new_pwd) < 6:
-            error = 'Password must be at least 6 characters.'
-        elif new_pwd != confirm:
-            error = 'Passwords do not match.'
-        else:
-            try:
-                with db_conn() as conn:
-                    user = conn.execute(
-                        "SELECT id FROM users WHERE LOWER(email)=?", (email,)
-                    ).fetchone()
-                    if not user:
-                        error = 'No account found with that email.'
-                    else:
-                        conn.execute(
-                            "UPDATE users SET passwd=? WHERE id=?",
-                            (generate_password_hash(new_pwd), user['id']),
-                        )
-                        conn.commit()
-                        success = 'Password reset. You can now sign in with your new password.'
-            except Exception as e:
-                error = f'Password reset failed: {e}'
-
-    return render_template('reset_password.html', error=error, success=success)
+@app.before_request
+def enforce_password_change():
+    """While a user's password change is pending, confine them to that page."""
+    if not session.get('must_change_password'):
+        return
+    # Endpoints that must stay reachable so the user can actually change it.
+    if request.endpoint in ('change_password_page', 'change_password', 'logout', 'static'):
+        return
+    if request.path.startswith('/api/'):
+        return jsonify({'error': 'Password change required'}), 403
+    return redirect(url_for('change_password_page'))
 
 
 @app.route('/logout')
@@ -178,8 +146,8 @@ def change_password():
 
     if not current or not new_pwd or not confirm:
         return jsonify({'error': 'All fields are required.'}), 400
-    if len(new_pwd) < 6:
-        return jsonify({'error': 'New password must be at least 6 characters.'}), 400
+    if len(new_pwd) < 10:
+        return jsonify({'error': 'New password must be at least 10 characters.'}), 400
     if new_pwd != confirm:
         return jsonify({'error': 'New passwords do not match.'}), 400
 
@@ -191,10 +159,11 @@ def change_password():
             if not user or not check_password_hash(user['passwd'], current):
                 return jsonify({'error': 'Current password is incorrect.'}), 400
             conn.execute(
-                "UPDATE users SET passwd=? WHERE id=?",
+                "UPDATE users SET passwd=?, must_change_password=0 WHERE id=?",
                 (generate_password_hash(new_pwd), current_user_id()),
             )
             conn.commit()
+        session['must_change_password'] = False
         return jsonify({'ok': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
