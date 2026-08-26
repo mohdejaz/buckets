@@ -38,10 +38,11 @@ def init_db():
 
     cur.executescript("""
         CREATE TABLE IF NOT EXISTS users (
-            id      INTEGER PRIMARY KEY AUTOINCREMENT,
-            name    TEXT NOT NULL,
-            email   TEXT NOT NULL UNIQUE,
-            passwd  TEXT NOT NULL
+            id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+            name                 TEXT NOT NULL,
+            email                TEXT NOT NULL UNIQUE,
+            passwd               TEXT NOT NULL,
+            must_change_password INTEGER NOT NULL DEFAULT 0
         );
 
         CREATE TABLE IF NOT EXISTS accounts (
@@ -107,6 +108,8 @@ def init_db():
         cur.execute("ALTER TABLE users ADD COLUMN email TEXT NOT NULL DEFAULT ''")
     if 'passwd' not in cols:
         cur.execute("ALTER TABLE users ADD COLUMN passwd TEXT NOT NULL DEFAULT ''")
+    if 'must_change_password' not in cols:
+        cur.execute("ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0")
 
     # ── Schema migration: add is_settlement to buckets ───────────────────────
     bkt_cols = [r[1] for r in cur.execute("PRAGMA table_info(buckets)").fetchall()]
@@ -166,8 +169,10 @@ def init_db():
 
     if default_user is None:
         hashed = generate_password_hash(DEFAULT_USER_PASS)
+        # Seeded with a known default password → force a change on first login
+        # so a publicly-hosted box never has a usable known credential pair.
         cur.execute(
-            "INSERT INTO users (name, email, passwd) VALUES (?,?,?)",
+            "INSERT INTO users (name, email, passwd, must_change_password) VALUES (?,?,?,1)",
             (DEFAULT_USER_NAME, DEFAULT_USER_EMAIL, hashed),
         )
         conn.commit()
