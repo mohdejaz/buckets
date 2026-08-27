@@ -17,19 +17,11 @@ login. Hand the temporary password to the user over a private channel.
 """
 
 import argparse
-import secrets
-import string
 import sys
 
 from werkzeug.security import generate_password_hash
 
-from database import db_conn, init_db
-
-
-def _gen_temp_password(length=14):
-    """A readable but strong temporary password (letters + digits)."""
-    alphabet = string.ascii_letters + string.digits
-    return ''.join(secrets.choice(alphabet) for _ in range(length))
+from database import db_conn, gen_temp_password, init_db
 
 
 def _find_user(conn, email):
@@ -46,7 +38,7 @@ def cmd_add(args):
         print("Error: name and email are required.", file=sys.stderr)
         return 1
 
-    temp = _gen_temp_password()
+    temp = gen_temp_password()
     with db_conn() as conn:
         if _find_user(conn, email):
             print(f"Error: a user with email '{email}' already exists. "
@@ -86,7 +78,7 @@ def cmd_list(args):
 
 def cmd_reset_password(args):
     email = args.email.strip().lower()
-    temp = _gen_temp_password()
+    temp = gen_temp_password()
     with db_conn() as conn:
         user = _find_user(conn, email)
         if not user:
@@ -155,7 +147,9 @@ def main():
     args = parser.parse_args()
 
     # Ensure the schema (incl. must_change_password) exists before we touch it.
-    init_db()
+    # seed=False: managing users must never create the default user as a side
+    # effect, which it otherwise would whenever BUCKETS_DEFAULT_EMAIL is unset.
+    init_db(seed=False)
     sys.exit(args.func(args))
 
 

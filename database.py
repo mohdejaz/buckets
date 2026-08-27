@@ -1,21 +1,44 @@
 import sqlite3
 import os
+import secrets
+import string
 from contextlib import contextmanager
 from werkzeug.security import generate_password_hash
 
-DB_PATH = os.path.join(os.path.dirname(__file__), 'buckets.db')
+# Where the SQLite file lives. Defaults to the project directory, which is right
+# for local dev. On a host with ephemeral container storage (Fly, Render, …) point
+# BUCKETS_DB_PATH at a mounted volume, or every deploy wipes the database.
+DB_PATH = os.environ.get('BUCKETS_DB_PATH') or os.path.join(
+    os.path.dirname(__file__), 'buckets.db'
+)
 
-# Default user seeded on first run — override via env vars, or just sign up
-# through the app and ignore this account entirely.
+# Initial user seeded on first run. There is no signup page, so this is the
+# account you use to get in the first time; everyone else is added with
+# `manage_users.py add`.
+#
+# The password is deliberately NOT given a hardcoded default: a fixed one would
+# be published in the repo, letting a stranger who finds a hosted instance claim
+# the account by setting a password on it. Unset → generate one and print it to
+# the console at seed time.
 DEFAULT_USER_NAME  = os.environ.get('BUCKETS_DEFAULT_NAME', 'demo')
 DEFAULT_USER_EMAIL = os.environ.get('BUCKETS_DEFAULT_EMAIL', 'demo@example.com')
-DEFAULT_USER_PASS  = os.environ.get('BUCKETS_DEFAULT_PASSWORD', 'changeme123')   # change after first login
+DEFAULT_USER_PASS  = os.environ.get('BUCKETS_DEFAULT_PASSWORD')
+
+
+def gen_temp_password(length=14):
+    """A readable but strong temporary password (letters + digits)."""
+    alphabet = string.ascii_letters + string.digits
+    return ''.join(secrets.choice(alphabet) for _ in range(length))
 
 
 def get_db():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA foreign_keys = ON")
+    # SQLite locks the whole file for writes. Without a busy timeout a request
+    # that collides with another writer fails instantly with "database is
+    # locked"; this waits its turn instead.
+    conn.execute("PRAGMA busy_timeout = 5000")
     return conn
 
 
@@ -29,7 +52,12 @@ def db_conn():
         conn.close()
 
 
-def init_db():
+def init_db(seed=True):
+    """Create/migrate the schema, and (unless seed=False) seed the initial user.
+
+    Pass seed=False when you only need the schema to exist — `manage_users.py`
+    does, so that running it never conjures a default user as a side effect.
+    """
     conn = get_db()
     cur = conn.cursor()
 
@@ -162,20 +190,41 @@ def init_db():
 
     conn.commit()
 
+    if not seed:
+        cur.execute("PRAGMA foreign_keys = ON")
+        conn.commit()
+        conn.close()
+        return
+
     # ── Seed default user if not present ──────────────────────────────────────
     default_user = cur.execute(
         "SELECT id FROM users WHERE LOWER(email)=?", (DEFAULT_USER_EMAIL.lower(),)
     ).fetchone()
 
     if default_user is None:
-        hashed = generate_password_hash(DEFAULT_USER_PASS)
-        # Seeded with a known default password → force a change on first login
-        # so a publicly-hosted box never has a usable known credential pair.
-        cur.execute(
-            "INSERT INTO users (name, email, passwd, must_change_password) VALUES (?,?,?,1)",
-            (DEFAULT_USER_NAME, DEFAULT_USER_EMAIL, hashed),
-        )
-        conn.commit()
+        passwd = DEFAULT_USER_PASS or gen_temp_password()
+        # Always force a change on first login, so even a password that leaked
+        # via the console or shell history is single-use.
+        try:
+            cur.execute(
+                "INSERT INTO users (name, email, passwd, must_change_password) VALUES (?,?,?,1)",
+                (DEFAULT_USER_NAME, DEFAULT_USER_EMAIL, generate_password_hash(passwd)),
+            )
+            conn.commit()
+        except sqlite3.IntegrityError:
+            # Another gunicorn worker seeded it first — app.py runs init_db() at
+            # import, so every worker races here on a fresh database.
+            conn.rollback()
+        else:
+            if not DEFAULT_USER_PASS:
+                print("\n" + "=" * 70)
+                print("  Seeded the initial Buckets user.")
+                print(f"    Email:    {DEFAULT_USER_EMAIL}")
+                print(f"    Password: {passwd}")
+                print("  Shown once, right now. It must be changed at first login.")
+                print("  Set BUCKETS_DEFAULT_PASSWORD before first run to choose your own.")
+                print("=" * 70 + "\n", flush=True)
+
         default_user = cur.execute(
             "SELECT id FROM users WHERE LOWER(email)=?", (DEFAULT_USER_EMAIL.lower(),)
         ).fetchone()

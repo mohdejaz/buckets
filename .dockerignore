@@ -1,0 +1,16 @@
+# Never bake secrets or local state into the image
+.env
+.envrc
+buckets.db
+buckets.db-journal
+
+venv/
+__pycache__/
+*.pyc
+
+.git/
+.gitignore
+.claude/
+README.md
+run.sh
+run.bat
