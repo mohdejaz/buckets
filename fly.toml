@@ -1,0 +1,36 @@
+# Fly.io deployment config for Buckets.
+#
+# Rename `app` to whatever you registered, and set primary_region to a Fly
+# region near you (`fly platform regions` lists them).
+
+app = 'buckets'
+primary_region = 'ord'
+
+[build]
+
+[env]
+  # Cookies are HTTPS-only here — force_https below guarantees TLS.
+  BUCKETS_SECURE_COOKIES = '1'
+  # Must match the volume mount below. Also set in the Dockerfile; kept here so
+  # it's visible next to the mount it depends on.
+  BUCKETS_DB_PATH = '/data/buckets.db'
+
+# Persistent storage for the SQLite file. Without this the database is destroyed
+# on every deploy, taking all your users and transactions with it.
+[mounts]
+  source = 'buckets_data'
+  destination = '/data'
+
+[http_service]
+  internal_port = 8080
+  force_https = true
+  auto_stop_machines = 'stop'
+  auto_start_machines = true
+  # A Fly volume attaches to exactly one machine. Two machines would mean two
+  # separate databases silently diverging, so this app stays at a single
+  # instance — do not scale it out.
+  min_machines_running = 0
+
+[[vm]]
+  size = 'shared-cpu-1x'
+  memory = '256mb'
