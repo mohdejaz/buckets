@@ -283,7 +283,8 @@ body {
 /* These tables scroll with the page, so pin the header below the sticky topbar */
 #bucketsCard .table-head th,
 #txCard .table-head th { top: var(--topbar-height); }
-.table td { padding: .7rem 1rem; vertical-align: middle; border-color: var(--border); }
+/* Data tables are long — keep their rows tight */
+.table td { padding: .35rem 1rem; line-height: 1.35; vertical-align: middle; border-color: var(--border); }
 .table tbody tr:last-child td { border-bottom: none; }
 .table-hover tbody tr:hover { background: #f8fafc; }
 
@@ -439,9 +440,9 @@ a { text-decoration: none; }
   #bucketsBody tr td:nth-child(5),
   #bucketsBody tr td:nth-child(6) { display: none; }
 
-  /* Hide Posted column (#5) in Transactions and Bucket Detail */
-  #section-transactions .table-head th:nth-child(5),
-  #txBody tr td:nth-child(5),
+  /* Hide Posted column: #6 in Transactions (Note column shifts it), #5 in Bucket Detail */
+  #section-transactions .table-head th:nth-child(6),
+  #txBody tr td:nth-child(6),
   #section-bucket-detail .table-head th:nth-child(5),
   #bucketDetailBody tr td:nth-child(5) { display: none; }
 }
