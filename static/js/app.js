@@ -936,8 +936,13 @@ const BucketDetail = {
     // the Settlement bucket's "New Transaction" already allows inflows.
     $('btnBucketDetailDeposit').classList.toggle('d-none', b.is_settlement);
 
+    const deposits = data.transactions
+      .reduce((sum, t) => t.amount > 0 ? sum + t.amount : sum, 0);
+    const withdrawals = data.transactions
+      .reduce((sum, t) => t.amount < 0 ? sum - t.amount : sum, 0);
+
     $('bucketDetailStats').innerHTML = `
-      <div class="col-sm-4">
+      <div class="col-sm-6 col-xl-3">
         <div class="stat-card stat-card--blue">
           <div class="stat-icon"><i class="bi bi-wallet2"></i></div>
           <div class="stat-body">
@@ -946,8 +951,8 @@ const BucketDetail = {
           </div>
         </div>
       </div>
-      <div class="col-sm-4">
-        <div class="stat-card stat-card--green">
+      <div class="col-sm-6 col-xl-3">
+        <div class="stat-card stat-card--purple">
           <div class="stat-icon"><i class="bi bi-cash-stack"></i></div>
           <div class="stat-body">
             <div class="stat-label">Budget</div>
@@ -955,12 +960,21 @@ const BucketDetail = {
           </div>
         </div>
       </div>
-      <div class="col-sm-4">
-        <div class="stat-card stat-card--purple">
-          <div class="stat-icon"><i class="bi bi-receipt"></i></div>
+      <div class="col-sm-6 col-xl-3">
+        <div class="stat-card stat-card--green">
+          <div class="stat-icon"><i class="bi bi-arrow-down-circle"></i></div>
           <div class="stat-body">
-            <div class="stat-label">Transactions</div>
-            <div class="stat-value">${data.transactions.length}</div>
+            <div class="stat-label">Total Deposits</div>
+            <div class="stat-value">${fmt(deposits)}</div>
+          </div>
+        </div>
+      </div>
+      <div class="col-sm-6 col-xl-3">
+        <div class="stat-card stat-card--red">
+          <div class="stat-icon"><i class="bi bi-arrow-up-circle"></i></div>
+          <div class="stat-body">
+            <div class="stat-label">Total Withdrawals</div>
+            <div class="stat-value">${fmt(withdrawals)}</div>
           </div>
         </div>
       </div>`;
