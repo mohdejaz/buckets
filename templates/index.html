@@ -14,7 +14,7 @@
   <!-- Custom CSS -->
   <link rel="stylesheet" href="/static/css/style.css"/>
 </head>
-<body>
+<body data-show-intro="{{ 1 if show_intro else 0 }}">
 
 <!-- Mobile sidebar backdrop -->
 <div class="sidebar-backdrop" id="sidebarBackdrop"></div>
@@ -97,6 +97,9 @@
           <span class="user-chip-email">{{ user_email }}</span>
         </div>
       </div>
+      <button class="btn-logout w-100 mt-1" id="btnWatchIntroSidebar">
+        <i class="bi bi-play-circle me-1"></i>Watch Intro
+      </button>
       <div class="d-flex gap-2 mt-1">
         <button class="btn-logout flex-fill" id="btnChangePasswordSidebar">
           <i class="bi bi-key me-1"></i>Password
@@ -123,7 +126,10 @@
           <div class="topbar-user-name">{{ user_name }}</div>
           <div class="topbar-user-email">{{ user_email }}</div>
         </div>
-        <button class="btn btn-sm btn-outline-primary ms-2" id="btnChangePassword" title="Change Password">
+        <button class="btn btn-sm btn-outline-primary ms-2" id="btnWatchIntro" title="Watch the intro tour">
+          <i class="bi bi-play-circle"></i>
+        </button>
+        <button class="btn btn-sm btn-outline-primary" id="btnChangePassword" title="Change Password">
           <i class="bi bi-key"></i>
         </button>
         <a href="/logout" class="btn btn-sm btn-outline-secondary" title="Sign Out">
@@ -824,6 +830,31 @@
     <div class="d-flex">
       <div class="toast-body" id="toastMessage">Done!</div>
       <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+
+<!-- Intro / Walkthrough Modal -->
+<div class="modal fade" id="introModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-play-circle me-2"></i>Welcome to Buckets</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3">
+          A 90-second tour of how buckets, accounts, and transactions fit together.
+        </p>
+        <!-- src is set in JS so the 27 MB file isn't touched until the modal opens;
+             "metadata" then pulls just enough to show a first frame. -->
+        <video id="introVideo" class="w-100 rounded" controls preload="metadata" playsinline></video>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-primary" data-bs-dismiss="modal">
+          <i class="bi bi-check-circle me-1"></i>Got it
+        </button>
+      </div>
     </div>
   </div>
 </div>

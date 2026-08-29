@@ -29,6 +29,10 @@
     .alert { font-size: .83rem; border-radius: 8px; }
     .divider { display: flex; align-items: center; gap: .75rem; margin: 1.25rem 0; color: #94a3b8; font-size: .78rem; }
     .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: #e2e8f0; }
+    .btn-tour { display: inline-flex; align-items: center; justify-content: center; gap: .4rem; width: 100%;
+                background: #f8fafc; border: 1px solid #cbd5e1; color: #4f46e5; font-weight: 600;
+                font-size: .85rem; padding: .55rem; border-radius: 8px; transition: background .15s; }
+    .btn-tour:hover { background: #eef2ff; border-color: #a5b4fc; color: #4338ca; }
   </style>
 </head>
 <body>
@@ -79,10 +83,36 @@
         <i class="bi bi-box-arrow-in-right me-2"></i>Sign In
       </button>
     </form>
+
+    <div class="divider">New to Buckets?</div>
+
+    <button type="button" class="btn-tour" data-bs-toggle="modal" data-bs-target="#tourModal">
+      <i class="bi bi-play-circle"></i>Watch the 90-second tour
+    </button>
   </div>
 
   <div class="auth-footer">
     Access is invite-only. Contact the administrator for an account.
+  </div>
+</div>
+
+<!-- Tour Modal -->
+<div class="modal fade" id="tourModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-play-circle me-2 text-primary"></i>A quick tour of Buckets</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-muted small mb-3">
+          How buckets, accounts, and transactions fit together — recorded against a demo account.
+        </p>
+        <!-- src is set on open so the 27 MB file isn't fetched by everyone who
+             merely loads the sign-in page. -->
+        <video id="tourVideo" class="w-100 rounded" controls preload="metadata" playsinline></video>
+      </div>
+    </div>
   </div>
 </div>
 
@@ -91,6 +121,13 @@
   // Reset per-session UI state so a fresh login starts clean (e.g. "More" row counts)
   sessionStorage.removeItem('bucketsShown');
   sessionStorage.removeItem('txShown');
+
+  const tourModal = document.getElementById('tourModal');
+  const tourVideo = document.getElementById('tourVideo');
+  tourModal.addEventListener('show.bs.modal', function () {
+    if (!tourVideo.src) tourVideo.src = '/media/intro.mp4';
+  });
+  tourModal.addEventListener('hidden.bs.modal', function () { tourVideo.pause(); });
 
   document.getElementById('togglePwd').addEventListener('click', function () {
     const inp = document.getElementById('password');

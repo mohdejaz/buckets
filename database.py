@@ -70,7 +70,8 @@ def init_db(seed=True):
             name                 TEXT NOT NULL,
             email                TEXT NOT NULL UNIQUE,
             passwd               TEXT NOT NULL,
-            must_change_password INTEGER NOT NULL DEFAULT 0
+            must_change_password INTEGER NOT NULL DEFAULT 0,
+            intro_seen           INTEGER NOT NULL DEFAULT 0
         );
 
         CREATE TABLE IF NOT EXISTS accounts (
@@ -138,6 +139,13 @@ def init_db(seed=True):
         cur.execute("ALTER TABLE users ADD COLUMN passwd TEXT NOT NULL DEFAULT ''")
     if 'must_change_password' not in cols:
         cur.execute("ALTER TABLE users ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0")
+
+    # ── Schema migration: add intro_seen to users ────────────────────────────
+    # Anyone who already has an account has been using the app, so backfill
+    # them as "seen". Only accounts created from here on get the intro tour.
+    if 'intro_seen' not in cols:
+        cur.execute("ALTER TABLE users ADD COLUMN intro_seen INTEGER NOT NULL DEFAULT 0")
+        cur.execute("UPDATE users SET intro_seen=1")
 
     # ── Schema migration: add is_settlement to buckets ───────────────────────
     bkt_cols = [r[1] for r in cur.execute("PRAGMA table_info(buckets)").fetchall()]

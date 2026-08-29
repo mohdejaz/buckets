@@ -1792,12 +1792,60 @@ const App = {
     Iou.init();
     Trash.init();
     ChangePassword.init();
+    Intro.init();
 
     // Initial data load
     Accounts.load().then(() => {
       this.nav('dashboard');
       Trash.refreshBadge();
     });
+  },
+};
+
+// ============================================================
+// INTRO WALKTHROUGH
+// ============================================================
+const Intro = {
+  modal: null,
+  video: null,
+
+  init() {
+    this.modal = new bootstrap.Modal($('introModal'));
+    this.video = $('introVideo');
+
+    [$('btnWatchIntro'), $('btnWatchIntroSidebar')].forEach(btn => {
+      if (btn) btn.addEventListener('click', () => this.open());
+    });
+
+    // Stop playback (and the download) when the modal is dismissed.
+    $('introModal').addEventListener('hidden.bs.modal', () => {
+      this.video.pause();
+    });
+
+    // Watching is not "activity" as far as the idle timer is concerned, so
+    // keep it alive while the video is actually playing.
+    this.video.addEventListener('timeupdate', () => IdleTimer.reset());
+
+    // First login: open it unprompted, and remember that we did.
+    if (document.body.dataset.showIntro === '1') {
+      this.open();
+      this.markSeen();
+    }
+  },
+
+  open() {
+    // Assigning src lazily keeps the video off the wire until it's wanted.
+    if (!this.video.src) this.video.src = '/media/intro.mp4';
+    this.modal.show();
+  },
+
+  async markSeen() {
+    try {
+      await api('POST', '/api/intro-seen');
+    } catch (e) {
+      // Not worth interrupting the user — worst case the tour opens again.
+      console.warn('Could not record intro as seen:', e.message);
+    }
   },
 };
 
