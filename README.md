@@ -98,6 +98,7 @@ python manage_users.py delete jane@example.com
 | `BUCKETS_SECURE_COOKIES` | Set to `1` when serving over HTTPS so session cookies are HTTPS-only. Leave unset for plain-HTTP local dev. |
 | `BUCKETS_DEFAULT_NAME` / `_EMAIL` / `_PASSWORD` | Credentials for the user seeded on first run. Read only at seed time. If `_PASSWORD` is unset, one is generated and printed to the console once. |
 | `BUCKETS_DB_PATH` | Where the SQLite file lives. Defaults to `buckets.db` in the project directory. Point this at a mounted volume on any host with ephemeral disk. |
+| `BUCKETS_ADMIN_EMAIL` | Contact address shown on the sign-in page, so an invitee has somewhere to request an account. Rendered as a public `mailto:` link — expect it to be scraped. Unset (the default) falls back to "Contact the administrator for an account." |
 | `HOST` / `PORT` | Bind address for `run.sh`. Defaults to `0.0.0.0:8080`. |
 
 `run.sh` loads a gitignored `.env` file from the project directory if one exists, so you can keep these there for local dev instead of exporting them by hand.

@@ -92,7 +92,13 @@
   </div>
 
   <div class="auth-footer">
-    Access is invite-only. Contact the administrator for an account.
+    {% if admin_email %}
+      Access is invite-only. Email
+      <a href="mailto:{{ admin_email }}?subject=Buckets%20account%20request">{{ admin_email }}</a>
+      to request an account.
+    {% else %}
+      Access is invite-only. Contact the administrator for an account.
+    {% endif %}
   </div>
 </div>
 

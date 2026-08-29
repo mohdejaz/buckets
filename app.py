@@ -33,6 +33,12 @@ app.config.update(
 )
 
 
+# Shown on the sign-in page so an invitee has somewhere to write. Kept in the
+# environment rather than the template: it's the one address that changes
+# without the code changing, and it stays out of a public repo.
+ADMIN_EMAIL = os.environ.get('BUCKETS_ADMIN_EMAIL', '').strip()
+
+
 # ---------------------------------------------------------------------------
 # Auth helpers
 # ---------------------------------------------------------------------------
@@ -83,7 +89,7 @@ def login():
         except Exception as e:
             error = f'Login failed: {e}'
 
-    return render_template('login.html', error=error)
+    return render_template('login.html', error=error, admin_email=ADMIN_EMAIL)
 
 
 # Signup is intentionally disabled — this is an invite-only deployment.
