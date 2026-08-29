@@ -10,6 +10,9 @@ primary_region = 'dfw'
 [env]
   BUCKETS_DB_PATH = '/data/buckets.db'
   BUCKETS_SECURE_COOKIES = '1'
+  # Uncomment to show a contact address on the sign-in page. Anything set here
+  # is public — it renders as a mailto link that invitees (and scrapers) can see.
+  # BUCKETS_ADMIN_EMAIL = 'you@example.com'
 
 [[mounts]]
   source = 'buckets_data'
