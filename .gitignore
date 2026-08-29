@@ -221,3 +221,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Source recording for the walkthrough. The web-ready remux lives at
+# media/buckets-intro.mp4 and is the copy that's committed.
+Buckets.mov

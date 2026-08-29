@@ -6,7 +6,8 @@ from datetime import date
 from functools import wraps
 
 from flask import (Flask, jsonify, redirect, render_template,
-                   request, make_response, session, url_for)
+                   request, make_response, send_from_directory, session,
+                   url_for)
 from werkzeug.security import check_password_hash, generate_password_hash
 
 from database import db_conn, init_db
@@ -124,12 +125,45 @@ def logout():
 # Main page
 # ---------------------------------------------------------------------------
 
+MEDIA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'media')
+INTRO_VIDEO = 'buckets-intro.mp4'
+
+
 @app.route('/')
 @login_required
 def index():
+    with db_conn() as conn:
+        row = conn.execute(
+            "SELECT intro_seen FROM users WHERE id=?", (current_user_id(),)
+        ).fetchone()
     return render_template('index.html',
                            user_name=session.get('user_name', ''),
-                           user_email=session.get('user_email', ''))
+                           user_email=session.get('user_email', ''),
+                           show_intro=not (row and row['intro_seen']))
+
+
+@app.route('/media/intro.mp4')
+def intro_video():
+    """The walkthrough recording — deliberately public, so the sign-in page can
+    show it to invitees who don't have a password yet. It's a tour of the demo
+    account, not of anyone's real balances. conditional=True keeps Range
+    requests working, so the player can seek."""
+    return send_from_directory(MEDIA_DIR, INTRO_VIDEO,
+                               mimetype='video/mp4', conditional=True)
+
+
+@app.route('/api/intro-seen', methods=['POST'])
+@login_required
+def intro_seen():
+    """Remember that this user has watched the tour, so it stops auto-opening."""
+    try:
+        with db_conn() as conn:
+            conn.execute("UPDATE users SET intro_seen=1 WHERE id=?",
+                         (current_user_id(),))
+            conn.commit()
+        return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
 
 
 # ---------------------------------------------------------------------------
