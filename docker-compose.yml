@@ -1,0 +1,46 @@
+services:
+  buckets:
+    image: ghcr.io/mohdejaz/buckets:latest
+    # To run your own build instead of the published image, comment out `image`
+    # above and uncomment this:
+    # build: .
+    container_name: buckets
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    volumes:
+      # The SQLite file must live outside the container — container storage is
+      # recreated on every pull.
+      - buckets_data:/data
+    environment:
+      BUCKETS_DB_PATH: /data/buckets.db
+
+      # Required. Signs session cookies; if it changes, everyone is logged out.
+      # Generate once and keep it: openssl rand -hex 32
+      BUCKETS_SECRET_KEY: ${BUCKETS_SECRET_KEY:?set BUCKETS_SECRET_KEY in .env — see README}
+
+      # Set to 1 when serving over HTTPS (behind a reverse proxy, say), so
+      # session cookies are HTTPS-only. Leave 0 for plain-HTTP LAN use.
+      BUCKETS_SECURE_COOKIES: ${BUCKETS_SECURE_COOKIES:-0}
+
+      # Read only when the database is first created. Set these before the
+      # first start to seed your own account; leave them unset and a password
+      # is generated and printed to the log once (docker compose logs buckets).
+      BUCKETS_DEFAULT_NAME: ${BUCKETS_DEFAULT_NAME:-}
+      BUCKETS_DEFAULT_EMAIL: ${BUCKETS_DEFAULT_EMAIL:-}
+      BUCKETS_DEFAULT_PASSWORD: ${BUCKETS_DEFAULT_PASSWORD:-}
+
+      # Optional contact address on the sign-in page. Public — it renders as a
+      # mailto link, so expect it to be scraped.
+      BUCKETS_ADMIN_EMAIL: ${BUCKETS_ADMIN_EMAIL:-}
+    healthcheck:
+      # No curl in the slim image; the interpreter is already there.
+      test: ["CMD", "python", "-c",
+             "import urllib.request; urllib.request.urlopen('http://localhost:8080/login')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+volumes:
+  buckets_data:
