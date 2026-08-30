@@ -222,6 +222,8 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# Source recording for the walkthrough. The web-ready remux lives at
-# media/buckets-intro.mp4 and is the copy that's committed.
+# Source recording for the walkthrough, and the full-size remux made from it.
+# Both are kept locally to re-encode from; the compressed copy the app actually
+# serves (media/buckets-intro-small.mp4) is the one that's committed.
 Buckets.mov
+media/buckets-intro.mp4

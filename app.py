@@ -132,7 +132,7 @@ def logout():
 # ---------------------------------------------------------------------------
 
 MEDIA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'media')
-INTRO_VIDEO = 'buckets-intro.mp4'
+INTRO_VIDEO = 'buckets-intro-small.mp4'
 
 
 @app.route('/')
