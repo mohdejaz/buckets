@@ -279,10 +279,14 @@ body {
 
 .table-responsive { max-height: 480px; overflow-y: auto; }
 #bucketsCard .table-responsive,
-#txCard .table-responsive { max-height: none; overflow: visible; }
+#txCard .table-responsive,
+#iouSentCard .table-responsive,
+#iouReceivedCard .table-responsive { max-height: none; overflow: visible; }
 /* These tables scroll with the page, so pin the header below the sticky topbar */
 #bucketsCard .table-head th,
-#txCard .table-head th { top: var(--topbar-height); }
+#txCard .table-head th,
+#iouSentCard .table-head th,
+#iouReceivedCard .table-head th { top: var(--topbar-height); }
 /* Data tables are long — keep their rows tight */
 .table td { padding: .35rem 1rem; line-height: 1.35; vertical-align: middle; border-color: var(--border); }
 .table tbody tr:last-child td { border-bottom: none; }
