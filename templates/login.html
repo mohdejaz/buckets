@@ -26,6 +26,8 @@
     .auth-footer { text-align: center; padding: 1rem 2rem 1.5rem; font-size: .83rem; color: #64748b; }
     .auth-footer a { color: #4f46e5; font-weight: 600; text-decoration: none; }
     .auth-footer a:hover { text-decoration: underline; }
+    .auth-source { margin-top: .75rem; padding-top: .75rem; border-top: 1px solid #e2e8f0; font-size: .78rem; color: #94a3b8; }
+    .auth-source a { color: #475569; }
     .alert { font-size: .83rem; border-radius: 8px; }
     .divider { display: flex; align-items: center; gap: .75rem; margin: 1.25rem 0; color: #94a3b8; font-size: .78rem; }
     .divider::before, .divider::after { content: ''; flex: 1; height: 1px; background: #e2e8f0; }
@@ -99,6 +101,12 @@
     {% else %}
       Access is invite-only. Contact the administrator for an account.
     {% endif %}
+    <div class="auth-source">
+      Prefer to run your own? Buckets is open source —
+      <a href="https://github.com/mohdejaz/buckets" target="_blank" rel="noopener noreferrer">
+        <i class="bi bi-github"></i> github.com/mohdejaz/buckets
+      </a>
+    </div>
   </div>
 </div>
 
