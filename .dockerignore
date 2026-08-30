@@ -15,6 +15,7 @@ README.md
 run.sh
 run.bat
 
-# The QuickTime original of the walkthrough — media/buckets-intro.mp4 is the
-# one that ships; keep the 27 MB source out of the image.
+# The QuickTime original of the walkthrough. media/buckets-intro-small.mp4 is
+# the one that ships; keep the full-size source out of the image — COPY . .
+# would otherwise bake it in whether or not git tracks it.
 Buckets.mov

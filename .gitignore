@@ -222,8 +222,9 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
-# Source recording for the walkthrough, and the full-size remux made from it.
-# Both are kept locally to re-encode from; the compressed copy the app actually
-# serves (media/buckets-intro-small.mp4) is the one that's committed.
+# Source recording for the walkthrough. Re-encode from it if the tour is
+# re-cut; the compressed copy the app serves (media/buckets-intro-small.mp4)
+# is what's committed. The full-size remux is ignored so it can't get
+# committed or shipped again if a re-encode leaves one lying around.
 Buckets.mov
 media/buckets-intro.mp4
