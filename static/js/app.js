@@ -1232,76 +1232,120 @@ const Iou = {
     this.renderReceived(received);
   },
 
-  renderSent(rows) {
-    const body = $('iouSentBody');
+  _PAGE: 20,
+  _paging: {
+    sent:     { rows: [], shown: 0, target: parseInt(sessionStorage.getItem('iouSentShown')) || 20 },
+    received: { rows: [], shown: 0, target: parseInt(sessionStorage.getItem('iouReceivedShown')) || 20 },
+  },
+
+  // Both tabs share one paging engine; they differ only in element ids,
+  // the empty-state message and the row builder.
+  _renderTable(kind, rows) {
+    const cap = kind === 'sent' ? 'Sent' : 'Received';
+    const p = this._paging[kind];
+    p.rows = rows;
+    p.shown = 0;
+
+    const body = $(`iou${cap}Body`);
+    body.innerHTML = '';
+
     if (!rows.length) {
-      body.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-4">
-        <i class="bi bi-send fs-2 d-block mb-2 opacity-25"></i>No payment requests sent yet.</td></tr>`;
+      body.innerHTML = kind === 'sent'
+        ? `<tr><td colspan="6" class="text-center text-muted py-4">
+            <i class="bi bi-send fs-2 d-block mb-2 opacity-25"></i>No payment requests sent yet.</td></tr>`
+        : `<tr><td colspan="6" class="text-center text-muted py-4">
+            <i class="bi bi-inbox fs-2 d-block mb-2 opacity-25"></i>No payment requests received.</td></tr>`;
+      $(`iou${cap}MoreWrap`).classList.add('d-none');
+      $(`iou${cap}Info`).textContent = '';
       return;
     }
-    body.innerHTML = rows.map(x => {
-      const canAct = x.status === 'pending' || x.status === 'linked';
-      const actions = canAct ? `
-        <button class="action-btn action-btn-post me-1" onclick="Iou.settle(${x.id})" title="Mark settled">
-          <i class="bi bi-check-circle"></i>
+
+    this._appendRows(kind);
+  },
+
+  _appendRows(kind) {
+    const cap = kind === 'sent' ? 'Sent' : 'Received';
+    const p = this._paging[kind];
+    const limit = Math.min(p.target, p.rows.length);
+    const next = p.rows.slice(p.shown, limit);
+    p.shown = limit;
+
+    const row = kind === 'sent' ? x => this._rowSent(x) : x => this._rowReceived(x);
+    $(`iou${cap}Body`).insertAdjacentHTML('beforeend', next.map(row).join(''));
+
+    $(`iou${cap}Info`).textContent = `Showing ${p.shown} of ${p.rows.length}`;
+    $(`iou${cap}MoreWrap`).classList.toggle('d-none', p.shown >= p.rows.length);
+  },
+
+  showMore(kind) {
+    const p = this._paging[kind];
+    p.target += this._PAGE;
+    sessionStorage.setItem(kind === 'sent' ? 'iouSentShown' : 'iouReceivedShown', p.target);
+    this._appendRows(kind);
+  },
+
+  renderSent(rows) {
+    this._renderTable('sent', rows);
+  },
+
+  _rowSent(x) {
+    const canAct = x.status === 'pending' || x.status === 'linked';
+    const actions = canAct ? `
+      <button class="action-btn action-btn-post me-1" onclick="Iou.settle(${x.id})" title="Mark settled">
+        <i class="bi bi-check-circle"></i>
+      </button>
+      <button class="action-btn action-btn-delete" onclick="Iou.cancel(${x.id})" title="Cancel">
+        <i class="bi bi-x-circle"></i>
+      </button>` : '';
+    return `
+    <tr>
+      <td><strong>${esc(x.other_user_name)}</strong><br><small class="text-muted">${esc(x.other_user_email)}</small></td>
+      <td class="text-end font-monospace text-success">${fmt(x.amount)}</td>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.description)}</td>
+      <td class="d-none d-md-table-cell text-muted font-monospace" style="font-size:.82rem">${x.due_date || '—'}</td>
+      <td class="text-center">${this.statusBadge(x.status)}</td>
+      <td class="text-center" style="white-space:nowrap">
+        <button class="action-btn action-btn-edit me-1" onclick="Iou.openDetail(${x.id})" title="View details">
+          <i class="bi bi-info-circle"></i>
         </button>
-        <button class="action-btn action-btn-delete" onclick="Iou.cancel(${x.id})" title="Cancel">
-          <i class="bi bi-x-circle"></i>
-        </button>` : '';
-      return `
-      <tr>
-        <td><strong>${esc(x.other_user_name)}</strong><br><small class="text-muted">${esc(x.other_user_email)}</small></td>
-        <td class="text-end font-monospace text-success">${fmt(x.amount)}</td>
-        <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.description)}</td>
-        <td class="d-none d-md-table-cell text-muted font-monospace" style="font-size:.82rem">${x.due_date || '—'}</td>
-        <td class="text-center">${this.statusBadge(x.status)}</td>
-        <td class="text-center" style="white-space:nowrap">
-          <button class="action-btn action-btn-edit me-1" onclick="Iou.openDetail(${x.id})" title="View details">
-            <i class="bi bi-info-circle"></i>
-          </button>
-          ${actions}
-        </td>
-      </tr>`;
-    }).join('');
+        ${actions}
+      </td>
+    </tr>`;
   },
 
   renderReceived(rows) {
-    const body = $('iouReceivedBody');
-    if (!rows.length) {
-      body.innerHTML = `<tr><td colspan="6" class="text-center text-muted py-4">
-        <i class="bi bi-inbox fs-2 d-block mb-2 opacity-25"></i>No payment requests received.</td></tr>`;
-      return;
+    this._renderTable('received', rows);
+  },
+
+  _rowReceived(x) {
+    let actions = '';
+    if (x.status === 'pending') {
+      actions = `<button class="action-btn action-btn-refill" onclick="Iou.openLink(${x.id})" title="Link a transaction">
+        <i class="bi bi-link-45deg"></i>
+      </button>`;
+    } else if (x.status === 'linked') {
+      actions = `
+      <button class="action-btn action-btn-refill me-1" onclick="Iou.openLink(${x.id})" title="Re-link transaction">
+        <i class="bi bi-link-45deg"></i>
+      </button>
+      <button class="action-btn action-btn-delete" onclick="Iou.unlink(${x.id})" title="Unlink">
+        <i class="bi bi-link"></i>
+      </button>`;
     }
-    body.innerHTML = rows.map(x => {
-      let actions = '';
-      if (x.status === 'pending') {
-        actions = `<button class="action-btn action-btn-refill" onclick="Iou.openLink(${x.id})" title="Link a transaction">
-          <i class="bi bi-link-45deg"></i>
-        </button>`;
-      } else if (x.status === 'linked') {
-        actions = `
-        <button class="action-btn action-btn-refill me-1" onclick="Iou.openLink(${x.id})" title="Re-link transaction">
-          <i class="bi bi-link-45deg"></i>
+    return `
+    <tr>
+      <td><strong>${esc(x.other_user_name)}</strong><br><small class="text-muted">${esc(x.other_user_email)}</small></td>
+      <td class="text-end font-monospace amount-neg">${fmt(x.amount)}</td>
+      <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.description)}</td>
+      <td class="d-none d-md-table-cell text-muted font-monospace" style="font-size:.82rem">${x.due_date || '—'}</td>
+      <td class="text-center">${this.statusBadge(x.status)}</td>
+      <td class="text-center" style="white-space:nowrap">
+        <button class="action-btn action-btn-edit me-1" onclick="Iou.openDetail(${x.id})" title="View details">
+          <i class="bi bi-info-circle"></i>
         </button>
-        <button class="action-btn action-btn-delete" onclick="Iou.unlink(${x.id})" title="Unlink">
-          <i class="bi bi-link"></i>
-        </button>`;
-      }
-      return `
-      <tr>
-        <td><strong>${esc(x.other_user_name)}</strong><br><small class="text-muted">${esc(x.other_user_email)}</small></td>
-        <td class="text-end font-monospace amount-neg">${fmt(x.amount)}</td>
-        <td style="max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(x.description)}</td>
-        <td class="d-none d-md-table-cell text-muted font-monospace" style="font-size:.82rem">${x.due_date || '—'}</td>
-        <td class="text-center">${this.statusBadge(x.status)}</td>
-        <td class="text-center" style="white-space:nowrap">
-          <button class="action-btn action-btn-edit me-1" onclick="Iou.openDetail(${x.id})" title="View details">
-            <i class="bi bi-info-circle"></i>
-          </button>
-          ${actions}
-        </td>
-      </tr>`;
-    }).join('');
+        ${actions}
+      </td>
+    </tr>`;
   },
 
   openNew() {

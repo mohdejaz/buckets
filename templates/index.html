@@ -508,7 +508,7 @@
       </ul>
 
       <div id="iouSentPanel">
-        <div class="card shadow-sm">
+        <div class="card shadow-sm" id="iouSentCard">
           <div class="card-body p-0">
             <div class="table-responsive">
               <table class="table table-hover mb-0">
@@ -527,10 +527,18 @@
             </div>
           </div>
         </div>
+        <div class="d-flex justify-content-between align-items-center px-1 mt-2">
+          <div class="text-muted small" id="iouSentInfo"></div>
+          <div id="iouSentMoreWrap" class="d-none">
+            <a href="#" onclick="Iou.showMore('sent');return false" class="text-decoration-none small fw-medium">
+              More <i class="bi bi-chevron-down ms-1"></i>
+            </a>
+          </div>
+        </div>
       </div>
 
       <div id="iouReceivedPanel" class="d-none">
-        <div class="card shadow-sm">
+        <div class="card shadow-sm" id="iouReceivedCard">
           <div class="card-body p-0">
             <div class="table-responsive">
               <table class="table table-hover mb-0">
@@ -547,6 +555,14 @@
                 <tbody id="iouReceivedBody"></tbody>
               </table>
             </div>
+          </div>
+        </div>
+        <div class="d-flex justify-content-between align-items-center px-1 mt-2">
+          <div class="text-muted small" id="iouReceivedInfo"></div>
+          <div id="iouReceivedMoreWrap" class="d-none">
+            <a href="#" onclick="Iou.showMore('received');return false" class="text-decoration-none small fw-medium">
+              More <i class="bi bi-chevron-down ms-1"></i>
+            </a>
           </div>
         </div>
       </div>
