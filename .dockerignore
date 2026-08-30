@@ -10,10 +10,13 @@ __pycache__/
 
 .git/
 .gitignore
+.github/
 .claude/
 README.md
+docs/
 run.sh
 run.bat
+docker-compose.yml
 
 # The QuickTime original of the walkthrough. media/buckets-intro-small.mp4 is
 # the one that ships; keep the full-size source out of the image — COPY . .

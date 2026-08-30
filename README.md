@@ -2,13 +2,18 @@
 
 A self-hosted envelope-budgeting web app. Money lives in **accounts**, accounts are divided into **buckets** (budget envelopes like Groceries, Rent, Savings), and every dollar gets refilled into a bucket before it's allowed to be spent — classic envelope budgeting, without spreadsheets.
 
+![Buckets dashboard](docs/images/dashboard.png)
+
+<p align="center">
+  <img src="docs/images/buckets.png" width="49%" alt="Bucket list with budgets, balances, and refill factors"/>
+  <img src="docs/images/bucket-detail.png" width="49%" alt="A single bucket's transactions and totals"/>
+</p>
+
 ## About
 
 Buckets is a personal, self-hosted budgeting tool built around the envelope method: instead of tracking a single account balance, money is divided into purpose-specific buckets (Groceries, Rent, Savings, etc.), each refilled from a shared Settlement pool on your own schedule. It's designed for a household or a small number of trusted users who want simple, transparent budget tracking without third-party bank syncing, ads, or a subscription — just a Flask app and a SQLite file you control.
 
 Access is invite-only: there's no signup page, and you create each account yourself from the command line. That keeps a hosted instance closed to everyone but the people you hand credentials to.
-
-It was built iteratively with an AI coding assistant (Claude) rather than from an upfront spec, so it favors "solve the next real problem" over architectural completeness. It hasn't been security-audited or load-tested, and isn't intended for untrusted multi-tenant deployment — treat it as a personal-use tool.
 
 ## Features
 
@@ -30,6 +35,50 @@ It was built iteratively with an AI coding assistant (Claude) rather than from a
 - **Serving:** gunicorn in production, Flask's dev server for local work
 
 ## Getting started
+
+The quickest path is Docker. To run from source instead, skip to
+[Running from source](#running-from-source).
+
+```bash
+mkdir buckets && cd buckets
+curl -O https://raw.githubusercontent.com/mohdejaz/buckets/main/docker-compose.yml
+
+# A stable secret key, so restarts don't log everyone out
+echo "BUCKETS_SECRET_KEY=$(openssl rand -hex 32)" > .env
+
+# Optional: seed your own account instead of a generated one.
+# These are read only on first start, while the database is created.
+cat >> .env <<'EOF'
+BUCKETS_DEFAULT_NAME=Your Name
+BUCKETS_DEFAULT_EMAIL=you@example.com
+BUCKETS_DEFAULT_PASSWORD=pick-something-long
+EOF
+
+docker compose up -d
+```
+
+The app is at [http://localhost:8080](http://localhost:8080). If you skipped the
+seed variables, the generated password is printed once in the log:
+
+```bash
+docker compose logs buckets
+```
+
+The database lives in the `buckets_data` volume, so it survives
+`docker compose pull` and recreates. To add the people you're inviting:
+
+```bash
+docker compose exec buckets python manage_users.py add "Jane Doe" jane@example.com
+```
+
+Images are published to `ghcr.io/mohdejaz/buckets` for amd64 and arm64, so this
+works on a Raspberry Pi or an Apple-silicon Mac as well as an x86 box.
+
+Serving it beyond your own LAN means putting a reverse proxy in front for TLS,
+and setting `BUCKETS_SECURE_COOKIES=1` in `.env` once you do — read
+[Scope and caveats](#scope-and-caveats) first.
+
+## Running from source
 
 Requires Python 3.9+.
 
@@ -145,6 +194,20 @@ Give each person their temporary password over a private channel; they'll be for
 fly ssh console -C "cat /data/buckets.db" > backup-$(date +%F).db
 ```
 
+## Scope and caveats
+
+Worth knowing before you deploy it:
+
+- **It's a personal-use tool.** It was built iteratively with an AI coding assistant (Claude) rather than from an upfront spec, so it favors "solve the next real problem" over architectural completeness. It hasn't been security-audited or load-tested, and isn't intended for untrusted multi-tenant deployment. Run it for yourself, your household, or a handful of people you know.
+- **One instance, one SQLite file.** Writes are serialized and the database is a single file on a single volume. Running two instances against separate copies makes them diverge silently — don't scale it out.
+- **No bank syncing.** Every transaction is entered by hand. That's the design, not a missing feature; there's no third-party aggregator holding your credentials.
+- **No self-service account recovery.** There's no signup page and no password-reset email. Accounts are created and reset from the command line with `manage_users.py`, by whoever runs the instance.
+- **Back it up yourself.** Nothing is backed up automatically. It's one SQLite file — copy it somewhere on a schedule.
+
+Found a security issue? Please report it privately through
+[GitHub's security advisories](https://github.com/mohdejaz/buckets/security/advisories/new)
+rather than a public issue.
+
 ## Project structure
 
 ```
@@ -155,6 +218,8 @@ templates/        Jinja2 page templates
 static/           CSS and vanilla JS frontend
 Dockerfile        Production image (gunicorn)
 fly.toml          Fly.io app config — volume mount, HTTPS, single instance
+docker-compose.yml Single-service deployment against the published image
+docs/images/      README screenshots
 ```
 
 ## License
