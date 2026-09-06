@@ -847,7 +847,7 @@ const Transactions = {
       }
       this.modal.hide();
       await this.load();
-      if (State.currentSection === 'buckets') await Buckets.load();
+      if (State.currentSection === 'buckets' || State.currentSection === 'transactions') await Buckets.load();
       if (State.currentSection === 'bucket-detail') await BucketDetail.load(State.currentBucketId);
       if (State.currentSection === 'dashboard') Dashboard.load();
     } catch (e) { showError(e.message); }
@@ -863,7 +863,7 @@ const Transactions = {
       const res = await api('DELETE', `/api/transactions/${id}`);
       toast(res.deleted_linked ? 'Transfer deleted (both sides)' : 'Transaction deleted');
       await this.load();
-      if (State.currentSection === 'buckets') await Buckets.load();
+      if (State.currentSection === 'buckets' || State.currentSection === 'transactions') await Buckets.load();
       if (State.currentSection === 'bucket-detail') await BucketDetail.load(State.currentBucketId);
       Trash.refreshBadge();
     } catch (e) { showError(e.message); }
@@ -874,6 +874,7 @@ const Transactions = {
       await api('POST', `/api/transactions/${id}/post`);
       toast('Transaction posted');
       await this.load();
+      if (State.currentSection === 'buckets' || State.currentSection === 'transactions') await Buckets.load();
     } catch (e) { showError(e.message); }
   },
 
@@ -882,6 +883,7 @@ const Transactions = {
       await api('POST', `/api/transactions/${id}/unpost`);
       toast('Transaction unposted');
       await this.load();
+      if (State.currentSection === 'buckets' || State.currentSection === 'transactions') await Buckets.load();
     } catch (e) { showError(e.message); }
   },
 
