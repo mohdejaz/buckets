@@ -1,2 +1,10 @@
 flask>=3.0.0
 gunicorn
+
+# Optional — only needed for receipt scanning. The app runs without them;
+# ai.py guards the imports and the feature stays hidden when they're absent.
+openai>=1.40.0
+Pillow>=10.0.0
+# Accepts HEIC photos straight off an iPhone. iOS Safari converts to JPEG on
+# upload, but a desktop drag-and-drop of a .heic file needs this.
+pillow-heif>=0.16.0

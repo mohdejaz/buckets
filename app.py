@@ -10,6 +10,7 @@ from flask import (Flask, jsonify, redirect, render_template,
                    url_for)
 from werkzeug.security import check_password_hash, generate_password_hash
 
+import ai
 from database import db_conn, init_db
 
 app = Flask(__name__)
@@ -1567,6 +1568,184 @@ def iou_transactions():
             'pages': pages,
             'per_page': per_page,
         })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+
+# ---------------------------------------------------------------------------
+# Receipt scanning (optional — inert unless OPENAI_API_KEY is set)
+# ---------------------------------------------------------------------------
+
+def _user_buckets(conn, acct_id, user_id):
+    """Non-archived buckets for an account the user actually owns."""
+    return conn.execute(
+        """SELECT b.id, b.name, b.is_settlement
+           FROM buckets b JOIN accounts a ON a.id = b.acct_id
+           WHERE b.acct_id=? AND a.user_id=? AND b.archived=0
+           ORDER BY b.name""",
+        (acct_id, user_id),
+    ).fetchall()
+
+
+@app.route('/api/ai/status')
+@login_required
+def ai_status():
+    """Lets the frontend decide whether to render the upload control."""
+    return jsonify({'enabled': ai.enabled(), 'reason': ai.unavailable_reason()})
+
+
+@app.route('/api/ai/parse-receipt', methods=['POST'])
+@login_required
+def parse_receipt():
+    """Read receipt images and propose a per-bucket breakdown.
+
+    Read-only by design: this returns a proposal for the user to correct. The
+    commit is a separate, explicit call to /api/transactions/batch.
+    """
+    if not ai.enabled():
+        return jsonify({'error': 'Receipt scanning is not configured.'}), 503
+
+    acct_id = request.form.get('acct_id', type=int)
+    if not acct_id:
+        return jsonify({'error': 'acct_id is required'}), 400
+
+    files = request.files.getlist('images')
+    if not files:
+        return jsonify({'error': 'Attach at least one image.'}), 400
+    if len(files) > ai.MAX_IMAGES:
+        return jsonify({'error': f'At most {ai.MAX_IMAGES} images per receipt.'}), 400
+
+    try:
+        with db_conn() as conn:
+            rows = _user_buckets(conn, acct_id, current_user_id())
+            if not rows:
+                return jsonify({'error': 'No buckets found for this account.'}), 404
+            # Settlement funds refills; it is not a spending target.
+            spendable = [r for r in rows if not r['is_settlement']]
+            if not spendable:
+                return jsonify({'error': 'This account has no spending buckets yet.'}), 400
+
+            # The user's own history is what teaches the model that a given
+            # cryptic vendor string means Groceries *for them*.
+            examples = conn.execute(
+                """SELECT t.note, b.name FROM transactions t
+                   JOIN buckets b ON b.id = t.bucket_id
+                   JOIN accounts a ON a.id = b.acct_id
+                   WHERE a.user_id=? AND t.deleted=0 AND t.note != ''
+                     AND b.is_settlement=0
+                   ORDER BY t.id DESC LIMIT 40""",
+                (current_user_id(),),
+            ).fetchall()
+
+        images = [(f.read(), f.filename or '') for f in files]
+        parsed = ai.parse_receipt(
+            images,
+            [r['name'] for r in spendable],
+            [(e['note'], e['name']) for e in examples],
+        )
+        lookup = {r['name'].lower(): {'id': r['id'], 'name': r['name']} for r in spendable}
+        proposal = ai.build_proposal(parsed, lookup, date.today().isoformat())
+        proposal['acct_id'] = acct_id
+        return jsonify(proposal)
+    except ValueError as e:
+        return jsonify({'error': str(e)}), 400
+    except Exception as e:
+        # Network/API failures land here. Nothing was written either way.
+        return jsonify({'error': f'Could not read the receipt: {e}'}), 502
+
+
+@app.route('/api/transactions/batch', methods=['POST'])
+@login_required
+def create_transactions_batch():
+    """Commit a reviewed receipt as one all-or-nothing batch.
+
+    Validates every line before inserting any of them. Doing this per-row
+    through the single-transaction route would leave a half-entered receipt
+    the moment one bucket ran short, and would also miss the case where two
+    lines share a bucket and only overdraw it together.
+    """
+    data = request.json or {}
+    tx_date = (data.get('tx_date') or date.today().isoformat()).strip()
+    lines = data.get('lines') or []
+    if not lines:
+        return jsonify({'error': 'No lines to add.'}), 400
+
+    receipt_id = secrets.token_hex(8)
+    try:
+        with db_conn() as conn:
+            owned = {
+                r['id']: r['name']
+                for r in conn.execute(
+                    """SELECT b.id, b.name FROM buckets b
+                       JOIN accounts a ON a.id = b.acct_id
+                       WHERE a.user_id=? AND b.archived=0""",
+                    (current_user_id(),),
+                ).fetchall()
+            }
+
+            prepared, needed = [], {}
+            for i, line in enumerate(lines):
+                bucket_id = line.get('bucket_id')
+                amount = _fmt(line.get('amount', 0))
+                note = (line.get('note') or line.get('description') or '').strip()
+                if bucket_id not in owned:
+                    return jsonify({'error': f'Line {i + 1}: pick a bucket.'}), 400
+                if amount == 0:
+                    return jsonify({'error': f'Line {i + 1} ({note}): amount cannot be zero.'}), 400
+                prepared.append((tx_date, bucket_id, amount, note))
+                if amount < 0:
+                    needed[bucket_id] = needed.get(bucket_id, 0) + amount
+
+            # Overdraft check on the batch total per bucket, not per line.
+            short = []
+            for bucket_id, delta in needed.items():
+                balance = _fmt(conn.execute(
+                    "SELECT COALESCE(SUM(amount),0) FROM transactions"
+                    " WHERE bucket_id=? AND deleted=0", (bucket_id,)
+                ).fetchone()[0])
+                if balance + delta < 0:
+                    short.append({
+                        'bucket_id': bucket_id,
+                        'bucket': owned[bucket_id],
+                        'balance': balance,
+                        'needed': _fmt(-delta),
+                        'shortfall': _fmt(-(balance + delta)),
+                    })
+            if short:
+                return jsonify({
+                    'error': 'Not enough in some buckets — refill or reassign first.',
+                    'short': short,
+                }), 400
+
+            conn.executemany(
+                "INSERT INTO transactions (tx_date, bucket_id, amount, note, posted, receipt_id)"
+                " VALUES (?,?,?,?,0,?)",
+                [(d, b, a, n, receipt_id) for d, b, a, n in prepared],
+            )
+            conn.commit()
+
+        return jsonify({'receipt_id': receipt_id, 'count': len(prepared)}), 201
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/transactions/receipt/<receipt_id>', methods=['DELETE'])
+@login_required
+def delete_receipt_batch(receipt_id):
+    """Soft-delete every row from one receipt — the undo for a bad scan."""
+    try:
+        with db_conn() as conn:
+            cur = conn.execute(
+                """UPDATE transactions SET deleted=1
+                   WHERE receipt_id=? AND deleted=0 AND bucket_id IN (
+                       SELECT b.id FROM buckets b JOIN accounts a ON a.id = b.acct_id
+                       WHERE a.user_id=?
+                   )""",
+                (receipt_id, current_user_id()),
+            )
+            conn.commit()
+        return jsonify({'deleted': cur.rowcount})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

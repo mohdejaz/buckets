@@ -2004,5 +2004,585 @@ const IdleTimer = {
   },
 };
 
+
+
+
+
+// ============================================================
+// Receipt scanning
+// ------------------------------------------------------------
+// Upload a receipt, review a proposed breakdown, commit it.
+//
+// The table shows a row per bucket with its line items nested underneath.
+// Each item carries its own description, pre-tax amount, tax share and bucket;
+// a bucket's header row is the sum of its items. What gets SAVED is still one
+// transaction per bucket — forty warehouse-store rows is not useful ledger
+// history — but the items are what you edit to get there.
+//
+// Tax is allocated across the lines the receipt marked taxable, in integer
+// cents by largest remainder, so the shares add up to the tax on the bill
+// exactly. Any share can be typed over; a readout says whether the total still
+// matches. The toggle turns allocation off and puts tax on its own line.
+//
+// Nothing reaches the database until "Add transactions" is pressed, and that
+// call is all-or-nothing on the server.
+// ============================================================
+const Receipt = {
+  modal: null,
+  items: [],          // line items — the editable detail
+  parsed: null,       // the server's proposal, kept so toggling is free
+  spreadTax: true,
+  expanded: {},       // bucket_id -> items shown
+  printedTotal: null,
+
+  async init() {
+    // The button stays hidden unless the server says AI is configured, so a
+    // deployment without an API key shows no trace of the feature.
+    let status;
+    try {
+      status = await api('GET', '/api/ai/status');
+    } catch { return; }
+    if (!status.enabled) return;
+
+    $('btnScanReceipt').classList.remove('d-none');
+    this.modal = new bootstrap.Modal($('receiptModal'));
+
+    $('btnScanReceipt').addEventListener('click', () => this.open());
+    $('btnReceiptParse').addEventListener('click', () => this.parse());
+    $('btnReceiptCommit').addEventListener('click', () => this.commit());
+    $('btnReceiptBack').addEventListener('click', () => this.showUpload());
+    $('btnReceiptAddRow').addEventListener('click', () => this.addRow());
+    $('btnReceiptRetax').addEventListener('click', () => { this.applyTax(); this.render(); });
+    $('receiptFiles').addEventListener('change', () => this.preview());
+    $('receiptSpreadTax').addEventListener('change', e => {
+      // Rebuilding from the stored proposal keeps this instant and free —
+      // flipping the toggle must never re-call the API.
+      this.spreadTax = e.target.checked;
+      this.applyTax();
+      this.render();
+    });
+    $('receiptMerchant').addEventListener('input', () => {
+      if (this.items.length) this.recalc();
+    });
+  },
+
+  open() {
+    if (!State.accountId) { showError('Pick an account first.'); return; }
+    if (!State.buckets.filter(b => !b.is_settlement).length) {
+      showError('Add a spending bucket to this account first.');
+      return;
+    }
+    $('receiptFiles').value = '';
+    $('receiptPreview').innerHTML = '';
+    this.items = [];
+    this.parsed = null;
+    this.taxTouched = false;
+    this.expanded = {};
+    this.printedTotal = null;
+    this.showUpload();
+    this.modal.show();
+  },
+
+  showUpload() {
+    $('receiptStepUpload').classList.remove('d-none');
+    $('receiptStepReview').classList.add('d-none');
+    $('btnReceiptParse').classList.remove('d-none');
+    $('btnReceiptCommit').classList.add('d-none');
+    $('btnReceiptBack').classList.add('d-none');
+    $('receiptUploadError').classList.add('d-none');
+  },
+
+  showReview() {
+    $('receiptStepUpload').classList.add('d-none');
+    $('receiptStepReview').classList.remove('d-none');
+    $('btnReceiptParse').classList.add('d-none');
+    $('btnReceiptCommit').classList.remove('d-none');
+    $('btnReceiptBack').classList.remove('d-none');
+  },
+
+  preview() {
+    const box = $('receiptPreview');
+    box.innerHTML = '';
+    [...$('receiptFiles').files].slice(0, 5).forEach(f => {
+      const img = document.createElement('img');
+      img.src = URL.createObjectURL(f);
+      img.className = 'rounded border';
+      img.style.cssText = 'height:90px;width:auto;object-fit:cover';
+      img.onload = () => URL.revokeObjectURL(img.src);
+      box.appendChild(img);
+    });
+  },
+
+  // ---- money -------------------------------------------------------------
+
+  // Spread tax proportionally over the taxable lines, in integer cents.
+  // Proportional shares almost never divide evenly, so take the floor and hand
+  // out the leftover pennies by largest fractional remainder — that is what
+  // makes the shares add up to the tax printed on the bill exactly, rather
+  // than drifting a cent or two from what the card was charged.
+  allocateTax(lineCents, taxableFlags, taxCents) {
+    const shares = lineCents.map(() => 0);
+    if (taxCents <= 0) return shares;
+
+    let flags = taxableFlags;
+    let base = lineCents.reduce((s, c, i) => s + (flags[i] && c > 0 ? c : 0), 0);
+
+    // No usable tax markers on the receipt. Dropping the tax would understate
+    // every bucket, so fall back to spreading across all positive lines.
+    if (base <= 0) {
+      flags = lineCents.map(c => c > 0);
+      base = lineCents.reduce((s, c) => s + (c > 0 ? c : 0), 0);
+    }
+    if (base <= 0) return shares;
+
+    const remainders = [];
+    lineCents.forEach((c, i) => {
+      if (!flags[i] || c <= 0) return;
+      const exact = taxCents * c / base;
+      shares[i] = Math.floor(exact);
+      remainders.push([exact - shares[i], i]);
+    });
+
+    const leftover = taxCents - shares.reduce((s, v) => s + v, 0);
+    remainders.sort((a, b) => b[0] - a[0]);
+    for (let k = 0; k < leftover && remainders.length; k++) {
+      shares[remainders[k % remainders.length][1]] += 1;
+    }
+    return shares;
+  },
+
+  // (Re)compute every item's tax share. Called on parse, when the toggle flips,
+  // and from "Recalculate" — never silently on an edit, because that would
+  // quietly overwrite a share the user had already typed in.
+  applyTax() {
+    const billTaxCents = Math.round(-(this.parsed && this.parsed.tax || 0) * 100);
+
+    // Drop any previous synthetic tax line before deciding what to do.
+    this.items = this.items.filter(l => !l._taxLine);
+
+    if (!this.spreadTax) {
+      this.items.forEach(l => { l.tax = 0; });
+      if (billTaxCents > 0) {
+        const biggest = this.items.find(l => l.bucket_id && l.amount < 0);
+        this.items.push({
+          description: 'Sales tax',
+          amount: this.parsed.tax,
+          tax: 0,
+          bucket_id: biggest ? biggest.bucket_id : null,
+          include: true,
+          _taxLine: true,
+        });
+      }
+      return;
+    }
+
+    const live = this.items.filter(l => l.include !== false);
+    const cents = live.map(l => Math.round(-l.amount * 100));
+    const flags = live.map(l => !!l.taxable);
+    const anyTaxable = flags.some((f, i) => f && cents[i] > 0);
+
+    // allocateTax falls back to "spread over everything" when nothing is
+    // marked, which is right for a receipt that printed no tax codes but wrong
+    // once the user has unticked boxes on purpose. Honour the empty selection
+    // and let the readout show that the tax no longer matches the bill.
+    const shares = (!anyTaxable && this.taxTouched)
+      ? cents.map(() => 0)
+      : this.allocateTax(cents, flags, billTaxCents);
+
+    this.items.forEach(l => { l.tax = 0; });
+    live.forEach((l, i) => { l.tax = -shares[i] / 100; });
+  },
+
+  taxTotal() {
+    return Math.round(this.items
+      .filter(l => l.include !== false)
+      .reduce((s, l) => s + (l.tax || 0), 0) * 100) / 100;
+  },
+
+  groups() {
+    const map = new Map();
+    this.items.filter(l => l.include !== false).forEach(l => {
+      const key = l.bucket_id || 0;
+      if (!map.has(key)) map.set(key, { bucket_id: l.bucket_id || null, items: [], subtotal: 0, tax: 0, total: 0 });
+      const g = map.get(key);
+      g.items.push(l);
+      g.subtotal = Math.round((g.subtotal + l.amount) * 100) / 100;
+      g.tax = Math.round((g.tax + (l.tax || 0)) * 100) / 100;
+      g.total = Math.round((g.total + l.amount + (l.tax || 0)) * 100) / 100;
+    });
+    const out = [...map.values()];
+    out.sort((a, b) => {
+      if (!a.bucket_id) return -1;          // unassigned first — it blocks commit
+      if (!b.bucket_id) return 1;
+      return Math.abs(b.total) - Math.abs(a.total);
+    });
+    return out;
+  },
+
+  // ---- parsing -----------------------------------------------------------
+
+  async parse() {
+    const files = [...$('receiptFiles').files];
+    if (!files.length) { showError('Choose a receipt image first.'); return; }
+
+    const btn = $('btnReceiptParse');
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Reading…';
+    $('receiptUploadError').classList.add('d-none');
+
+    const fd = new FormData();
+    fd.append('acct_id', State.accountId);
+    files.slice(0, 5).forEach(f => fd.append('images', f));
+
+    try {
+      const r = await fetch('/api/ai/parse-receipt', { method: 'POST', body: fd });
+      if (r.status === 401) { window.location.href = '/login'; return; }
+      const data = await r.json();
+      if (!r.ok) throw new Error(data.error || 'Could not read the receipt.');
+      if (!data.lines || !data.lines.length) throw new Error('No line items found on that image.');
+
+      this.parsed = data;
+      this.printedTotal = data.printed_total;
+      this.expanded = {};
+      // Nothing on the receipt was marked taxable, so spreading could only
+      // guess. Start with tax on its own line and let the user opt in.
+      if (!data.has_tax_codes) this.spreadTax = false;
+      $('receiptSpreadTax').checked = this.spreadTax;
+      $('receiptMerchant').value = data.merchant || '';
+      $('receiptDate').value = data.purchase_date || today();
+
+      this.items = data.lines.map(l => ({
+        description: l.description,
+        amount: l.amount,                 // printed price, negative for a charge
+        tax: 0,
+        taxable: !!l.taxable,
+        tax_code: l.tax_code || '',
+        bucket_id: l.bucket_id,
+        include: true,
+      }));
+      this.applyTax();
+
+      const disc = $('receiptDiscrepancy');
+      if (data.discrepancy) {
+        // The transcription didn't add up to the printed total. Surfaced, not
+        // blocked — the running total updates as the table is corrected.
+        disc.textContent =
+          `The receipt reads ${fmt(data.printed_total)} but the transcribed items and tax `
+          + `come to ${fmt(data.computed_total)} — a difference of `
+          + `${fmt(Math.abs(data.discrepancy))}. Check for a missed or misread line.`;
+        disc.classList.remove('d-none');
+      } else {
+        disc.classList.add('d-none');
+      }
+
+      this.render();
+      this.showReview();
+    } catch (e) {
+      $('receiptUploadError').textContent = e.message;
+      $('receiptUploadError').classList.remove('d-none');
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = original;
+    }
+  },
+
+  addRow() {
+    this.items.push({
+      description: '', amount: 0, tax: 0, taxable: false,
+      bucket_id: null, include: true, _manual: true,
+    });
+    this.expanded[0] = true;
+    this.render();
+    const inputs = $('receiptLines').querySelectorAll('[data-ri="desc"]');
+    if (inputs.length) inputs[inputs.length - 1].focus();
+  },
+
+  // ---- rendering ---------------------------------------------------------
+
+  render() {
+    const opts = State.buckets
+      .filter(b => !b.is_settlement && !b.archived)
+      .map(b => `<option value="${b.id}">${esc(b.name)}</option>`)
+      .join('');
+    const named = id => {
+      const b = State.buckets.find(x => x.id === id);
+      return b ? b.name : 'Needs a bucket';
+    };
+
+    $('receiptLines').innerHTML = this.groups().map(g => {
+      const key = g.bucket_id || 0;
+      const open = this.expanded[key] !== false;   // expanded by default
+      const rows = g.items.map(l => {
+        const i = this.items.indexOf(l);
+        return `
+        <tr class="receipt-item">
+          <td class="ps-4">
+            <input type="text" class="form-control form-control-sm"
+                   placeholder="Description"
+                   data-ri="desc" data-i="${i}" value="${esc(l.description)}">
+          </td>
+          <td>
+            <input type="number" step="0.01"
+                   class="form-control form-control-sm text-end font-monospace"
+                   data-ri="amt" data-i="${i}" value="${Math.abs(l.amount).toFixed(2)}">
+          </td>
+          <td>
+            <div class="d-flex align-items-center gap-1">
+              <input type="checkbox" class="form-check-input mt-0" data-ri="taxable" data-i="${i}"
+                     ${l.taxable ? 'checked' : ''}
+                     title="${l.tax_code ? 'Receipt tax code: ' + esc(l.tax_code) : 'No tax code printed on this line'}">
+              <input type="number" step="0.01"
+                     class="form-control form-control-sm text-end font-monospace flex-grow-1"
+                     style="min-width:4.5rem"
+                     data-ri="tax" data-i="${i}" ${l.taxable ? '' : 'disabled'}
+                     value="${Math.abs(l.tax || 0).toFixed(2)}">
+            </div>
+          </td>
+          <td>
+            <select class="form-select form-select-sm" data-ri="bkt" data-i="${i}">
+              <option value="">— pick —</option>${opts}
+            </select>
+          </td>
+          <td class="text-center">
+            <button class="btn btn-sm btn-link text-danger p-0" data-ri="del" data-i="${i}"
+                    title="Remove this item"><i class="bi bi-x-lg"></i></button>
+          </td>
+        </tr>`;
+      }).join('');
+
+      return `
+      <tr class="table-active ${g.bucket_id ? '' : 'table-warning'}">
+        <td>
+          <button class="btn btn-sm btn-link p-0 text-decoration-none fw-semibold"
+                  data-ri="toggle" data-key="${key}">
+            <i class="bi bi-chevron-${open ? 'down' : 'right'} me-1"></i>${esc(named(g.bucket_id))}
+          </button>
+          <span class="text-muted small ms-1">${g.items.length} item${g.items.length > 1 ? 's' : ''}</span>
+        </td>
+        <td class="text-end font-monospace small text-muted">${fmt(Math.abs(g.subtotal))}</td>
+        <td class="text-end font-monospace small text-muted">${fmt(Math.abs(g.tax))}</td>
+        <td class="text-end fw-bold font-monospace" colspan="2">${fmt(g.total)}</td>
+      </tr>
+      ${open ? rows : ''}`;
+    }).join('');
+
+    this.items.forEach((l, i) => {
+      const sel = $('receiptLines').querySelector(`[data-ri="bkt"][data-i="${i}"]`);
+      if (sel) sel.value = l.bucket_id || '';
+    });
+
+    $('receiptLines').querySelectorAll('[data-ri]').forEach(el => {
+      const ev = el.tagName === 'BUTTON' ? 'click'
+               : el.dataset.ri === 'bkt' ? 'change' : 'input';
+      el.addEventListener(ev, e => this.onEdit(e));
+    });
+
+    this.recalc();
+  },
+
+  onEdit(e) {
+    const el = e.target.closest('[data-ri]');
+    if (!el) return;
+    const kind = el.dataset.ri;
+
+    if (kind === 'toggle') {
+      const key = parseInt(el.dataset.key);
+      this.expanded[key] = this.expanded[key] === false;
+      this.render();
+      return;
+    }
+
+    const i = parseInt(el.dataset.i);
+    const l = this.items[i];
+    if (!l) return;
+
+    switch (kind) {
+      case 'desc':
+        l.description = el.value;
+        return;                        // no re-render; it would drop focus
+      case 'amt': {
+        // Shown as a magnitude, stored negative — spending reduces a bucket
+        // balance. A row keeps whichever direction it had, so an edit can't
+        // silently turn a refund into a charge; type a leading minus to flip.
+        const v = Math.abs(parseFloat(el.value) || 0);
+        l.amount = el.value.trim().startsWith('-') ? v
+                 : (l.amount > 0 ? 1 : -1) * v;
+        this.refreshTotals();
+        return;
+      }
+      case 'taxable':
+        // Changing which lines are taxable changes the basis of the split, so
+        // the tax is redistributed across whatever is still ticked — that is
+        // what keeps the shares adding up to the bill. It does overwrite a
+        // hand-typed share, which is why an amount edit deliberately doesn't.
+        l.taxable = el.checked;
+        this.taxTouched = true;
+        this.applyTax();
+        this.render();
+        return;
+      case 'tax':
+        l.tax = -Math.abs(parseFloat(el.value) || 0);
+        this.refreshTotals();
+        return;
+      case 'bkt':
+        l.bucket_id = el.value ? parseInt(el.value) : null;
+        this.render();                 // regroup under the new bucket
+        return;
+      case 'del':
+        this.items.splice(i, 1);
+        this.render();
+        return;
+    }
+  },
+
+  // Update the bucket subtotals in place. A full re-render on every keystroke
+  // would steal focus from the field being typed into.
+  refreshTotals() {
+    const cells = $('receiptLines').querySelectorAll('tr.table-active');
+    const groups = this.groups();
+    cells.forEach((tr, idx) => {
+      const g = groups[idx];
+      if (!g) return;
+      const tds = tr.querySelectorAll('td');
+      tds[1].textContent = fmt(Math.abs(g.subtotal));
+      tds[2].textContent = fmt(Math.abs(g.tax));
+      tds[3].textContent = fmt(g.total);
+    });
+    this.recalc();
+  },
+
+  recalc() {
+    const groups = this.groups();
+    const usable = groups.filter(g => g.bucket_id && g.total !== 0);
+    const total = groups.reduce((s, g) => s + g.total, 0);
+    const subtotal = groups.reduce((s, g) => s + g.subtotal, 0);
+    const taxSum = groups.reduce((s, g) => s + g.tax, 0);
+    $('receiptTotal').textContent = fmt(Math.abs(total));
+    $('receiptBreakdown').textContent = taxSum
+      ? `items ${fmt(Math.abs(subtotal))} + tax ${fmt(Math.abs(taxSum))}`
+      : `items ${fmt(Math.abs(subtotal))}`;
+    $('receiptCount').textContent =
+      `${usable.length} transaction${usable.length === 1 ? '' : 's'} from `
+      + `${this.items.filter(l => l.include !== false).length} items`;
+
+    // Does the tax spread across the items still equal the tax on the bill?
+    const tn = $('receiptTaxNote');
+    const billTax = this.parsed ? Math.abs(this.parsed.tax || 0) : 0;
+    $('btnReceiptRetax').classList.toggle('d-none', !this.spreadTax || !billTax);
+    if (this.spreadTax && billTax) {
+      const applied = Math.abs(this.taxTotal());
+      const exact = Math.abs(applied - billTax) < 0.005;
+      const ticked = this.items.filter(l => l.include !== false && l.taxable).length;
+      tn.textContent = exact
+        ? `${fmt(billTax)} tax spread across ${ticked} taxable item`
+          + `${ticked === 1 ? '' : 's'} — matches the bill exactly.`
+        : `${ticked} taxable item${ticked === 1 ? '' : 's'} carry ${fmt(applied)} `
+          + `of tax but the bill says ${fmt(billTax)} `
+          + `(off by ${fmt(Math.abs(applied - billTax))}).`;
+      tn.className = exact ? 'form-text small mb-0 text-success'
+                           : 'form-text small mb-0 text-danger';
+    } else if (billTax) {
+      tn.textContent = `${fmt(billTax)} tax is on its own line.`;
+      tn.className = 'form-text small mb-0 text-muted';
+    } else {
+      tn.textContent = 'No sales tax was read from this receipt.';
+      tn.className = 'form-text small mb-0 text-muted';
+    }
+
+    // How the running total compares to the receipt, live as rows are edited.
+    const cmp = $('receiptCompare');
+    if (this.printedTotal) {
+      const diff = Math.round((Math.abs(total) - Math.abs(this.printedTotal)) * 100) / 100;
+      cmp.textContent = diff
+        ? `receipt ${fmt(this.printedTotal)} · off by ${fmt(Math.abs(diff))}`
+        : `matches receipt ${fmt(this.printedTotal)}`;
+      cmp.className = diff ? 'small text-danger' : 'small text-success';
+    } else {
+      cmp.textContent = '';
+    }
+
+    // Client-side preview of the server's overdraft rule, so a shortfall shows
+    // while it can still be fixed rather than as a rejected commit.
+    const short = [];
+    groups.forEach(g => {
+      if (!g.bucket_id || g.total >= 0) return;
+      const b = State.buckets.find(x => x.id === g.bucket_id);
+      if (b && parseFloat(b.balance) + g.total < -0.004) {
+        short.push(`${b.name} is short ${fmt(Math.abs(parseFloat(b.balance) + g.total))}`);
+      }
+    });
+
+    const msgs = [];
+    const orphan = groups.find(g => !g.bucket_id);
+    if (orphan) {
+      msgs.push(`${orphan.items.length} item${orphan.items.length > 1 ? 's' : ''} `
+                + `still need a bucket.`);
+    }
+    if (short.length) {
+      msgs.push(`Not enough balance: ${short.join('; ')}. Refill or reassign first.`);
+    }
+
+    const el = $('receiptShortfall');
+    el.innerHTML = msgs.join('<br>');
+    el.classList.toggle('d-none', !msgs.length);
+    $('btnReceiptCommit').disabled = !usable.length || !!msgs.length;
+    $('btnReceiptCommit').innerHTML =
+      `<i class="bi bi-check2-circle me-1"></i>Add ${usable.length} `
+      + `transaction${usable.length === 1 ? '' : 's'}`;
+  },
+
+  // Item names become the transaction note, capped so a forty-item warehouse
+  // run doesn't blow out the transaction table's layout.
+  describe(items) {
+    const MAX = 180;
+    const names = items.map(l => (l.description || '').trim()).filter(Boolean);
+    const kept = [];
+    let len = 0;
+    for (const n of names) {
+      if (len + n.length + 2 > MAX) break;
+      kept.push(n);
+      len += n.length + 2;
+    }
+    if (!kept.length && names.length) kept.push(names[0]);
+    const rest = names.length - kept.length;
+    return kept.join(', ') + (rest > 0 ? ` +${rest} more` : '');
+  },
+
+  async commit() {
+    const groups = this.groups().filter(g => g.bucket_id && g.total !== 0);
+    if (!groups.length) { showError('Nothing to add.'); return; }
+
+    const merchant = $('receiptMerchant').value.trim();
+    const btn = $('btnReceiptCommit');
+    const original = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Adding…';
+
+    try {
+      const res = await api('POST', '/api/transactions/batch', {
+        tx_date: $('receiptDate').value || today(),
+        lines: groups.map(g => {
+          const detail = this.describe(g.items);
+          return {
+            bucket_id: g.bucket_id,
+            amount: g.total,
+            note: merchant ? `${merchant} — ${detail}`.trim() : detail,
+          };
+        }),
+      });
+      this.modal.hide();
+      toast(`Added ${res.count} transaction${res.count > 1 ? 's' : ''}.`);
+      Buckets.load();
+      Transactions.load();
+    } catch (e) {
+      showError(e.message);
+    } finally {
+      btn.disabled = false;
+      btn.innerHTML = original;
+    }
+  },
+};
+
 // Boot
-document.addEventListener('DOMContentLoaded', () => { App.init(); IdleTimer.init(); });
+document.addEventListener('DOMContentLoaded', () => { App.init(); IdleTimer.init(); Receipt.init(); });
