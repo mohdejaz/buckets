@@ -157,43 +157,6 @@ python manage_users.py delete jane@example.com
 - `run.sh` — serves the app with gunicorn on `0.0.0.0:8080` (override with `HOST`/`PORT`). Expects a `venv/` in the project directory and sources `.env` if present.
 - `run.bat` — Windows helper that creates the venv, installs dependencies, and starts the app.
 
-## Deploying to Fly.io
-
-`Dockerfile` and `fly.toml` are set up for a single-instance deployment with a persistent volume. Edit `app` and `primary_region` in `fly.toml` first, then:
-
-```bash
-fly apps create <your-app-name>          # or: fly launch --no-deploy
-fly volumes create buckets_data --size 1 --region <your-region>
-```
-
-Set the secrets **before the first deploy**, so the database is seeded with your account rather than a generated one:
-
-```bash
-fly secrets set \
-  BUCKETS_SECRET_KEY="$(python3 -c 'import secrets;print(secrets.token_hex(32))')" \
-  BUCKETS_DEFAULT_NAME="Your Name" \
-  BUCKETS_DEFAULT_EMAIL="you@example.com" \
-  BUCKETS_DEFAULT_PASSWORD="pick-something-long"
-
-fly deploy
-```
-
-`BUCKETS_SECRET_KEY` matters as much as the credentials: without it the app generates a random key at every boot, so each deploy invalidates all sessions and logs everyone out.
-
-Then add the people you're inviting:
-
-```bash
-fly ssh console -C "python /app/manage_users.py add 'Jane Doe' jane@example.com"
-```
-
-Give each person their temporary password over a private channel; they'll be forced to replace it at first login.
-
-**Keep this at one machine.** A Fly volume attaches to a single machine, so scaling out gives each instance its own database and they diverge silently. To back up, copy the file off the volume:
-
-```bash
-fly ssh console -C "cat /data/buckets.db" > backup-$(date +%F).db
-```
-
 ## Scope and caveats
 
 Worth knowing before you deploy it:
@@ -217,7 +180,6 @@ manage_users.py   CLI to add / list / reset / delete users
 templates/        Jinja2 page templates
 static/           CSS and vanilla JS frontend
 Dockerfile        Production image (gunicorn)
-fly.toml          Fly.io app config — volume mount, HTTPS, single instance
 docker-compose.yml Single-service deployment against the published image
 docs/images/      README screenshots
 ```
