@@ -19,4 +19,6 @@ EXPOSE 8080
 
 # One worker: SQLite serializes writes, and extra worker processes buy nothing
 # but lock contention. Threads handle the concurrency a household app needs.
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "1", "--threads", "4", "--timeout", "60", "app:app"]
+# 300s, not the 60s a plain web app needs: receipt scanning blocks on a
+# vision model and a killed worker looks like a crash to the browser.
+CMD ["gunicorn", "--bind", "0.0.0.0:8080", "--workers", "1", "--threads", "4", "--timeout", "300", "app:app"]

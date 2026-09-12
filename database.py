@@ -196,6 +196,18 @@ def init_db(seed=True):
             WHERE note LIKE 'Transfer from bucket #%' AND linked_tx_id IS NULL
         """)
 
+    # ── Schema migration: add receipt_id to transactions ─────────────────────
+    # Groups the rows produced from one uploaded receipt under a shared id, so
+    # a mis-parsed batch can be reviewed or soft-deleted as a unit instead of
+    # row by row. NULL for everything entered by hand.
+    if 'receipt_id' not in tx_cols:
+        cur.execute("ALTER TABLE transactions ADD COLUMN receipt_id TEXT")
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_transactions_receipt"
+            " ON transactions(receipt_id)"
+        )
+        conn.commit()
+
     conn.commit()
 
     if not seed:

@@ -33,6 +33,16 @@ services:
       # Optional contact address on the sign-in page. Public — it renders as a
       # mailto link, so expect it to be scraped.
       BUCKETS_ADMIN_EMAIL: ${BUCKETS_ADMIN_EMAIL:-}
+
+      # Optional — receipt scanning. Unset leaves the feature off entirely and
+      # the upload control never renders. Compose only forwards variables it
+      # names here, so an OPENAI_API_KEY sitting in .env is NOT enough on its
+      # own; this line is what actually passes it through.
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      # Point at any OpenAI-compatible endpoint (Ollama, llama.cpp, LiteLLM)
+      # to keep receipt images on your own hardware.
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      BUCKETS_AI_MODEL: ${BUCKETS_AI_MODEL:-}
     healthcheck:
       # No curl in the slim image; the interpreter is already there.
       test: ["CMD", "python", "-c",

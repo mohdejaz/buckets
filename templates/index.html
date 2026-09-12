@@ -389,6 +389,9 @@
           <button class="btn btn-primary btn-sm" id="btnTxPageNewTx">
             <i class="bi bi-dash-circle me-1"></i>Withdraw
           </button>
+          <button class="btn btn-outline-primary btn-sm d-none" id="btnScanReceipt" title="Scan a receipt">
+            <i class="bi bi-camera"></i><span class="d-none d-sm-inline ms-1">Scan Receipt</span>
+          </button>
           <button class="btn btn-outline-success btn-sm" id="btnExportTx" title="Export to CSV">
             <i class="bi bi-download"></i><span class="d-none d-sm-inline ms-1">Export CSV</span>
           </button>
@@ -776,6 +779,110 @@
 </div>
 
 <!-- Transaction Modal -->
+<!-- Receipt scan modal — only reachable when the server reports AI is enabled -->
+<div class="modal fade" id="receiptModal" tabindex="-1">
+  <div class="modal-dialog modal-xl modal-dialog-centered modal-dialog-scrollable">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-camera me-2"></i>Scan Receipt</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+
+      <div class="modal-body">
+        <!-- Step 1: upload -->
+        <div id="receiptStepUpload">
+          <div class="mb-3">
+            <label class="form-label">Receipt photo</label>
+            <input type="file" class="form-control" id="receiptFiles"
+                   accept="image/*,.heic,.heif" multiple>
+            <div class="form-text">
+              Up to 5 images for one receipt — add a second photo if a long
+              receipt doesn't fit in one shot. Items are grouped under the
+              bucket they'll be charged to, and one transaction per bucket is
+              saved. Nothing is saved until you review and confirm.
+            </div>
+          </div>
+          <div id="receiptPreview" class="d-flex gap-2 flex-wrap mb-3"></div>
+          <div id="receiptUploadError" class="alert alert-danger d-none py-2 small"></div>
+        </div>
+
+        <!-- Step 2: review -->
+        <div id="receiptStepReview" class="d-none">
+          <div class="row g-2 mb-3">
+            <div class="col-sm-6">
+              <label class="form-label small text-muted mb-1">Merchant</label>
+              <input type="text" class="form-control form-control-sm" id="receiptMerchant">
+            </div>
+            <div class="col-sm-6">
+              <label class="form-label small text-muted mb-1">Date</label>
+              <input type="date" class="form-control form-control-sm" id="receiptDate">
+            </div>
+          </div>
+
+          <div class="form-check form-switch mb-2">
+            <input class="form-check-input" type="checkbox" id="receiptSpreadTax" checked>
+            <label class="form-check-label small" for="receiptSpreadTax">
+              Add sales tax to each item
+              <span class="text-muted">— off puts tax on its own row instead</span>
+            </label>
+            <div id="receiptTaxNote" class="form-text small mb-0"></div>
+          </div>
+
+          <div id="receiptDiscrepancy" class="alert alert-warning d-none py-2 small"></div>
+          <div id="receiptShortfall" class="alert alert-danger d-none py-2 small"></div>
+
+          <div class="table-responsive">
+            <table class="table table-sm align-middle mb-2">
+              <thead>
+                <tr>
+                  <th>Item</th>
+                  <th style="width:120px" class="text-end">Amount</th>
+                  <th style="width:150px" class="text-end">Tax</th>
+                  <th style="width:150px">Bucket</th>
+                  <th style="width:36px"></th>
+                </tr>
+              </thead>
+              <tbody id="receiptLines"></tbody>
+            </table>
+          </div>
+
+          <div class="d-flex gap-2 mb-2">
+            <button class="btn btn-sm btn-outline-secondary" id="btnReceiptAddRow">
+              <i class="bi bi-plus-lg me-1"></i>Add an item
+            </button>
+            <button class="btn btn-sm btn-outline-secondary" id="btnReceiptRetax"
+                    title="Re-spread the bill's tax across the taxable items">
+              <i class="bi bi-arrow-repeat me-1"></i>Recalculate tax
+            </button>
+          </div>
+
+          <div class="d-flex justify-content-between align-items-center border-top pt-2 small">
+            <span class="text-muted" id="receiptCount"></span>
+            <div class="text-end">
+              <div id="receiptBreakdown" class="small text-muted font-monospace"></div>
+              <div class="fw-bold font-monospace fs-6" id="receiptTotal">$0.00</div>
+              <div id="receiptCompare" class="small"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+        <button type="button" class="btn btn-outline-secondary d-none" id="btnReceiptBack">
+          <i class="bi bi-arrow-left me-1"></i>Back
+        </button>
+        <button type="button" class="btn btn-primary" id="btnReceiptParse">
+          <i class="bi bi-magic me-1"></i>Read receipt
+        </button>
+        <button type="button" class="btn btn-success d-none" id="btnReceiptCommit">
+          <i class="bi bi-check2-circle me-1"></i>Add transactions
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div class="modal fade" id="txModal" tabindex="-1">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">

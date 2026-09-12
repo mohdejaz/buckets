@@ -455,3 +455,17 @@ a { text-decoration: none; }
   .table-responsive { font-size: .8rem; }
   .action-btn { padding: .4rem .6rem; font-size: .78rem; }
 }
+
+/* Receipt review table — the amount and tax cells are narrow and the spinner
+   arrows steal enough width to clip the cents. The values are typed, not
+   stepped, so the arrows are no loss. */
+#receiptLines input[type="number"] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+#receiptLines input[type="number"]::-webkit-outer-spin-button,
+#receiptLines input[type="number"]::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+#receiptLines td { padding-left: .35rem; padding-right: .35rem; }
