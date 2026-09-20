@@ -522,7 +522,7 @@ def get_bucket_transactions(bkt_id):
             rows = conn.execute(
                 """SELECT id, tx_date, amount, note, posted, linked_tx_id
                    FROM transactions WHERE bucket_id=? AND deleted=0
-                   ORDER BY tx_date ASC, id ASC""",
+                   ORDER BY tx_date ASC, sort_order ASC, id ASC""",
                 (bkt_id,),
             ).fetchall()
 
@@ -909,7 +909,7 @@ def get_transactions():
                 "SELECT t.id, t.tx_date, b.name AS bucket, t.bucket_id,"
                 "       t.amount, t.note, t.posted, t.linked_tx_id "
                 + base_sql
-                + " ORDER BY t.tx_date DESC, t.id DESC LIMIT ? OFFSET ?",
+                + " ORDER BY t.tx_date DESC, t.sort_order DESC, t.id DESC LIMIT ? OFFSET ?",
                 params + [per_page, offset],
             ).fetchall()
 
@@ -918,7 +918,7 @@ def get_transactions():
                 skipped_sum = _fmt(conn.execute(
                     "SELECT COALESCE(SUM(amount),0) FROM (SELECT t.amount "
                     + base_sql
-                    + " ORDER BY t.tx_date DESC, t.id DESC LIMIT ?)",
+                    + " ORDER BY t.tx_date DESC, t.sort_order DESC, t.id DESC LIMIT ?)",
                     params + [offset],
                 ).fetchone()[0])
             running = _fmt(_account_balance(conn, acct_id) - skipped_sum)
@@ -1068,7 +1068,7 @@ def get_deleted_transactions():
                    FROM transactions t
                    JOIN buckets b ON b.id = t.bucket_id
                    WHERE b.acct_id = ? AND t.deleted=1
-                   ORDER BY t.tx_date DESC, t.id DESC""",
+                   ORDER BY t.tx_date DESC, t.sort_order DESC, t.id DESC""",
                 (acct_id,),
             ).fetchall()
             transactions = [
@@ -1217,6 +1217,70 @@ def unpost_transaction(tx_id):
         return jsonify({'error': str(e)}), 500
 
 
+@app.route('/api/transactions/<int:tx_id>/move', methods=['POST'])
+@login_required
+def move_transaction(tx_id):
+    """Swap a transaction with its neighbour on the same date.
+
+    Two transactions on one day have no natural order, so this lets the user
+    impose one. 'up'/'down' are the directions as the row is *displayed* --
+    both the account list and the bucket detail list run newest-first -- and
+    neighbours are found across the whole account, matching the list the
+    buttons live in. Moving never crosses a date boundary: a date change is a
+    different operation (edit the transaction).
+    """
+    direction = (request.json or {}).get('direction')
+    if direction not in ('up', 'down'):
+        return jsonify({'error': "direction must be 'up' or 'down'"}), 400
+
+    try:
+        with db_conn() as conn:
+            tx = conn.execute(
+                """SELECT t.tx_date, b.acct_id
+                   FROM transactions t
+                   JOIN buckets b ON b.id = t.bucket_id
+                   JOIN accounts a ON a.id = b.acct_id
+                   WHERE t.id=? AND t.deleted=0 AND a.user_id=?""",
+                (tx_id, current_user_id()),
+            ).fetchone()
+            if not tx:
+                return jsonify({'error': 'Transaction not found'}), 404
+
+            # The whole day, oldest first -- the reverse of how it is drawn.
+            rows = conn.execute(
+                """SELECT t.id, t.sort_order
+                   FROM transactions t
+                   JOIN buckets b ON b.id = t.bucket_id
+                   WHERE b.acct_id=? AND t.tx_date=? AND t.deleted=0
+                   ORDER BY t.sort_order ASC, t.id ASC""",
+                (tx['acct_id'], tx['tx_date']),
+            ).fetchall()
+
+            ids = [r['id'] for r in rows]
+            i = ids.index(tx_id)
+            # Displayed newest-first, so moving a row up the screen moves it
+            # one step later in this chronological list.
+            j = i + 1 if direction == 'up' else i - 1
+            if j < 0 or j >= len(ids):
+                # Already the first or last transaction of its day.
+                return jsonify({'ok': True, 'moved': False})
+            ids[i], ids[j] = ids[j], ids[i]
+
+            # Renumber the day over a contiguous run starting at its own
+            # lowest rank. Collisions with other dates do not matter -- rows
+            # are grouped by tx_date first, so sort_order only ever has to
+            # separate rows *within* one day.
+            base = min(r['sort_order'] for r in rows)
+            conn.executemany(
+                "UPDATE transactions SET sort_order=? WHERE id=?",
+                [(base + n, row_id) for n, row_id in enumerate(ids)],
+            )
+            conn.commit()
+        return jsonify({'ok': True, 'moved': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/transactions/export')
 @login_required
 def export_transactions():
@@ -1230,7 +1294,7 @@ def export_transactions():
                    FROM transactions t
                    JOIN buckets b ON b.id = t.bucket_id
                    WHERE b.acct_id = ? AND t.deleted=0
-                   ORDER BY t.tx_date ASC, t.id ASC""",
+                   ORDER BY t.tx_date ASC, t.sort_order ASC, t.id ASC""",
                 (acct_id,),
             ).fetchall()
 
@@ -1544,7 +1608,7 @@ def iou_transactions():
             rows   = conn.execute(
                 "SELECT t.id, t.tx_date, t.amount, t.note, b.name AS bucket, t.bucket_id"
                 + base_sql
-                + " ORDER BY t.tx_date DESC, t.id DESC LIMIT ? OFFSET ?",
+                + " ORDER BY t.tx_date DESC, t.sort_order DESC, t.id DESC LIMIT ? OFFSET ?",
                 params + [per_page, offset],
             ).fetchall()
 

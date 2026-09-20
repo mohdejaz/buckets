@@ -694,6 +694,7 @@ const Transactions = {
     this.modal = new bootstrap.Modal($('txModal'));
     $('btnSaveTx').addEventListener('click', () => this.save());
     $('btnTxPageNewTx').addEventListener('click', () => this.openNew());
+    $('btnTxPageDeposit').addEventListener('click', () => this.openNew(null, 'deposit'));
     $('btnExportTx').addEventListener('click', () => this.exportCsv());
     $('txBucket').addEventListener('change', () => {
       const bid = parseInt($('txBucket').value);
@@ -734,16 +735,26 @@ const Transactions = {
       body.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-4">
         <i class="bi bi-receipt fs-2 d-block mb-2 opacity-25"></i>No transactions found.</td></tr>`;
     } else {
-      const html = rows.map(t => {
+      const html = rows.map((t, i) => {
         const posted = t.posted
-          ? `<span class="badge-posted"><i class="bi bi-check-circle-fill me-1"></i>Posted</span>`
-          : `<span class="badge-unposted"><i class="bi bi-circle me-1"></i>Pending</span>`;
+          ? `<i class="bi bi-check-circle-fill status-posted" title="Posted" aria-label="Posted" role="img"></i>`
+          : `<i class="bi bi-circle status-pending" title="Pending" aria-label="Pending" role="img"></i>`;
         const postBtn = t.posted
           ? `<button class="action-btn action-btn-post" onclick="Transactions.unpost(${t.id})" title="Unpost"><i class="bi bi-x-circle"></i></button>`
           : `<button class="action-btn action-btn-post" onclick="Transactions.post(${t.id})" title="Post"><i class="bi bi-check-circle"></i></button>`;
+        // Reordering is only meaningful against another row of the same day,
+        // so the spinner appears only where there is one to trade places with.
+        const canUp   = i > 0 && rows[i - 1].tx_date === t.tx_date;
+        const canDown = i < rows.length - 1 && rows[i + 1].tx_date === t.tx_date;
+        const spinner = (canUp || canDown)
+          ? `<span class="tx-move">
+               <button onclick="Transactions.move(${t.id}, 'up')" title="Move up"${canUp ? '' : ' disabled'}><i class="bi bi-chevron-up"></i></button>
+               <button onclick="Transactions.move(${t.id}, 'down')" title="Move down"${canDown ? '' : ' disabled'}><i class="bi bi-chevron-down"></i></button>
+             </span>`
+          : '';
         return `
         <tr class="${t.posted ? '' : 'table-row-pending'}">
-          <td class="text-muted font-monospace" style="font-size:.82rem">${t.tx_date}</td>
+          <td class="text-muted font-monospace tx-date-cell" style="font-size:.82rem">${t.tx_date}${spinner}</td>
           <td style="white-space:nowrap">
             <span class="badge bg-light text-secondary border" style="font-size:.75rem">${esc(t.bucket)}</span>${t.linked_tx_id ? ' <span class="badge bg-secondary" style="font-size:.7rem">Transfer</span>' : ''}
           </td>
@@ -866,6 +877,15 @@ const Transactions = {
       if (State.currentSection === 'buckets' || State.currentSection === 'transactions') await Buckets.load();
       if (State.currentSection === 'bucket-detail') await BucketDetail.load(State.currentBucketId);
       Trash.refreshBadge();
+    } catch (e) { showError(e.message); }
+  },
+
+  async move(id, direction) {
+    try {
+      await api('POST', `/api/transactions/${id}/move`, { direction });
+      // Reordering leaves every total untouched, but it does change the
+      // running balance each row is shown against, so the list is refetched.
+      await this.load();
     } catch (e) { showError(e.message); }
   },
 
@@ -1003,8 +1023,8 @@ const BucketDetail = {
 
     body.insertAdjacentHTML('beforeend', next.map(t => {
       const posted = t.posted
-        ? `<span class="badge-posted"><i class="bi bi-check-circle-fill me-1"></i>Posted</span>`
-        : `<span class="badge-unposted"><i class="bi bi-circle me-1"></i>Pending</span>`;
+        ? `<i class="bi bi-check-circle-fill status-posted" title="Posted" aria-label="Posted" role="img"></i>`
+        : `<i class="bi bi-circle status-pending" title="Pending" aria-label="Pending" role="img"></i>`;
       const postBtn = t.posted
         ? `<button class="action-btn action-btn-post" onclick="BucketDetail.unpost(${t.id})" title="Unpost"><i class="bi bi-x-circle"></i></button>`
         : `<button class="action-btn action-btn-post" onclick="BucketDetail.post(${t.id})" title="Post"><i class="bi bi-check-circle"></i></button>`;

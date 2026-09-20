@@ -208,6 +208,30 @@ def init_db(seed=True):
         )
         conn.commit()
 
+    # ── Schema migration: add sort_order to transactions ────────────────
+    # Lets the user hand-order transactions that share a tx_date, which a date
+    # alone cannot express. Seeded to the row id so the default order stays
+    # exactly what it was before (lowest id first within a day); the trigger
+    # below keeps that true for new rows, so every row has a distinct rank and
+    # a freshly added transaction lands at the end of its day.
+    if 'sort_order' not in tx_cols:
+        cur.execute(
+            "ALTER TABLE transactions ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0"
+        )
+        cur.execute("UPDATE transactions SET sort_order = id")
+        conn.commit()
+
+    # Every INSERT site would otherwise have to remember to set sort_order; a
+    # trigger makes "defaults to the row id" a property of the table instead.
+    cur.execute("""
+        CREATE TRIGGER IF NOT EXISTS trg_transactions_sort_order
+        AFTER INSERT ON transactions
+        FOR EACH ROW WHEN NEW.sort_order = 0
+        BEGIN
+            UPDATE transactions SET sort_order = NEW.id WHERE id = NEW.id;
+        END;
+    """)
+
     conn.commit()
 
     if not seed:

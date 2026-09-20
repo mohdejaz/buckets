@@ -305,9 +305,11 @@ body {
 tr.bucket-overdrawn > td { background: var(--negative-bg); }
 .badge-overdraft { background: var(--negative-bg); color: var(--negative); font-size: .68rem; font-weight: 700; padding: .15em .5em; border-radius: 20px; margin-left: .4rem; white-space: nowrap; }
 
-/* Posted badge */
-.badge-posted   { background: var(--positive-bg); color: var(--positive); font-size: .72rem; font-weight: 600; padding: .2em .55em; border-radius: 20px; }
-.badge-unposted { background: #f1f5f9; color: #64748b; font-size: .72rem; font-weight: 600; padding: .2em .55em; border-radius: 20px; }
+/* Posted state is an icon alone — the column header already says "Posted", so
+   the word on every row was redundant. title/aria-label carry the meaning for
+   hover and screen readers. */
+.status-posted  { color: var(--positive); font-size: 1.05rem; line-height: 1; }
+.status-pending { color: #94a3b8; font-size: 1.05rem; line-height: 1; }
 
 /* Usage bar */
 .usage-bar-wrap { width: 80px; }
@@ -340,6 +342,39 @@ tr.bucket-overdrawn > td { background: var(--negative-bg); }
 .action-btn-select:hover { background: var(--primary); color: #fff; }
 .action-btn-post    { background: #fffbeb; color: #d97706; border-color: #fde68a; }
 .action-btn-post:hover { background: #d97706; color: #fff; }
+
+/* ============================================================
+   SAME-DAY REORDER SPINNER
+   ============================================================ */
+/* Lives in the Date cell rather than the Actions column: the ordering only
+   applies within one day, and Actions was already carrying three buttons. */
+.tx-date-cell { white-space: nowrap; }
+
+.tx-move {
+  display: inline-flex;
+  flex-direction: column;
+  vertical-align: middle;
+  margin-left: .4rem;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+.tx-move button {
+  display: block;
+  padding: 0 .2rem;
+  border: 0;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: .56rem;
+  line-height: .8;
+  cursor: pointer;
+  transition: background .12s, color .12s;
+}
+.tx-move button + button { border-top: 1px solid var(--border); }
+.tx-move button:hover:not(:disabled) { background: var(--primary); color: #fff; }
+/* Greyed rather than removed, so the spinner keeps its size and the row below
+   never shifts sideways when a transaction reaches the edge of its day. */
+.tx-move button:disabled { opacity: .45; cursor: default; }
 
 /* ============================================================
    PAGINATION
@@ -437,6 +472,8 @@ a { text-decoration: none; }
   /* Larger touch targets */
   .action-btn { padding: .45rem .7rem; font-size: .82rem; }
   .page-item .page-link { padding: .45rem .75rem; }
+  /* The spinner is a finger target here, not a pointer one. */
+  .tx-move button { padding: .18rem .5rem; font-size: .62rem; }
 
   /* Hide secondary columns: Refill MTD (#5) & Refill Factor (#6) in Buckets */
   #section-buckets .table-head th:nth-child(5),
