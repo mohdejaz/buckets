@@ -221,6 +221,59 @@ def _fmt(value):
         return 0.0
 
 
+def _refill_factor(value, default=1.0):
+    """A factor of 0 is a real choice: a bucket that keeps a budget on paper
+    but is never topped up automatically. So only a missing or unparseable
+    value falls back to the default — 0 is passed straight through."""
+    if value is None or value == '':
+        return default
+    try:
+        return max(0.0, round(float(value), 2))
+    except (TypeError, ValueError):
+        return default
+
+
+# Rows are addressed by bare id throughout this API, and @login_required only
+# proves that *someone* is logged in. These helpers prove the row belongs to the
+# caller: each returns None when it does not, which callers turn into a 404.
+# `columns` is only ever passed internally — never from request data.
+
+def _own_account(conn, acct_id):
+    return conn.execute(
+        "SELECT id FROM accounts WHERE id=? AND user_id=?",
+        (acct_id, current_user_id()),
+    ).fetchone()
+
+
+def _own_bucket(conn, bkt_id, columns="b.id"):
+    return conn.execute(
+        f"""SELECT {columns} FROM buckets b
+            JOIN accounts a ON a.id = b.acct_id
+            WHERE b.id=? AND a.user_id=?""",
+        (bkt_id, current_user_id()),
+    ).fetchone()
+
+
+def _own_tx(conn, tx_id, columns="t.id"):
+    return conn.execute(
+        f"""SELECT {columns} FROM transactions t
+            JOIN buckets b ON b.id = t.bucket_id
+            JOIN accounts a ON a.id = b.acct_id
+            WHERE t.id=? AND a.user_id=?""",
+        (tx_id, current_user_id()),
+    ).fetchone()
+
+
+def _own_upcoming(conn, item_id, columns="u.id"):
+    return conn.execute(
+        f"""SELECT {columns} FROM upcoming_expenses u
+            JOIN buckets b ON b.id = u.bucket_id
+            JOIN accounts a ON a.id = b.acct_id
+            WHERE u.id=? AND a.user_id=?""",
+        (item_id, current_user_id()),
+    ).fetchone()
+
+
 def _account_balance(conn, acct_id):
     row = conn.execute(
         """SELECT COALESCE(SUM(t.amount), 0) AS bal
@@ -357,6 +410,8 @@ def get_buckets():
         return jsonify([])
     try:
         with db_conn() as conn:
+            if not _own_account(conn, acct_id):
+                return jsonify([])
             archived_filter = "" if include_archived else " AND archived=0"
             rows = conn.execute(
                 """SELECT id, name, budget, acct_id, refill_factor, is_settlement, archived
@@ -390,11 +445,13 @@ def create_bucket():
     name          = (data.get('name') or '').strip()
     budget        = _fmt(data.get('budget', 0))
     acct_id       = data.get('acct_id')
-    refill_factor = _fmt(data.get('refill_factor', 1.0))
+    refill_factor = _refill_factor(data.get('refill_factor'))
     if not name or not acct_id:
         return jsonify({'error': 'Name and account are required'}), 400
     try:
         with db_conn() as conn:
+            if not _own_account(conn, acct_id):
+                return jsonify({'error': 'Account not found'}), 404
             cur = conn.execute(
                 "INSERT INTO buckets (name, budget, acct_id, refill_factor) VALUES (?,?,?,?)",
                 (name, budget, acct_id, refill_factor),
@@ -416,11 +473,13 @@ def update_bucket(bkt_id):
     data          = request.json
     name          = (data.get('name') or '').strip()
     budget        = _fmt(data.get('budget', 0))
-    refill_factor = _fmt(data.get('refill_factor', 1.0))
+    refill_factor = _refill_factor(data.get('refill_factor'))
     if not name:
         return jsonify({'error': 'Name is required'}), 400
     try:
         with db_conn() as conn:
+            if not _own_bucket(conn, bkt_id):
+                return jsonify({'error': 'Bucket not found'}), 404
             conn.execute(
                 "UPDATE buckets SET name=?, budget=?, refill_factor=? WHERE id=?",
                 (name, budget, refill_factor, bkt_id),
@@ -444,6 +503,8 @@ def update_bucket(bkt_id):
 def delete_bucket(bkt_id):
     try:
         with db_conn() as conn:
+            if not _own_bucket(conn, bkt_id):
+                return jsonify({'error': 'Bucket not found'}), 404
             cnt = conn.execute(
                 "SELECT COUNT(*) FROM transactions WHERE bucket_id=?", (bkt_id,)
             ).fetchone()[0]
@@ -560,9 +621,8 @@ def get_bucket_transactions(bkt_id):
 def refill_bucket(bkt_id):
     try:
         with db_conn() as conn:
-            row = conn.execute(
-                "SELECT b.budget, b.refill_factor, b.acct_id, b.archived FROM buckets b WHERE b.id=?", (bkt_id,)
-            ).fetchone()
+            row = _own_bucket(
+                conn, bkt_id, "b.budget, b.refill_factor, b.acct_id, b.archived")
             if not row:
                 return jsonify({'error': 'Bucket not found'}), 404
             if row['archived']:
@@ -571,6 +631,8 @@ def refill_bucket(bkt_id):
                 "SELECT id FROM buckets WHERE acct_id=? AND is_settlement=1", (row['acct_id'],)
             ).fetchone()
             amount = _fmt(row['budget'] * row['refill_factor'])
+            if amount <= 0:
+                return jsonify({'error': 'Nothing to refill — budget x refill factor is $0.00'}), 400
             if settlement:
                 s_balance = _fmt(conn.execute(
                     "SELECT COALESCE(SUM(amount),0) FROM transactions WHERE bucket_id=? AND deleted=0",
@@ -602,11 +664,15 @@ def refill_all_buckets():
         return jsonify({'error': 'acct_id required'}), 400
     try:
         with db_conn() as conn:
+            if not _own_account(conn, acct_id):
+                return jsonify({'error': 'Account not found'}), 404
             settlement = conn.execute(
                 "SELECT id FROM buckets WHERE acct_id=? AND is_settlement=1", (acct_id,)
             ).fetchone()
             buckets = conn.execute(
-                "SELECT id, budget, refill_factor FROM buckets WHERE acct_id=? AND budget > 0 AND is_settlement=0 AND archived=0",
+                """SELECT id, budget, refill_factor FROM buckets
+                   WHERE acct_id=? AND budget > 0 AND refill_factor > 0
+                     AND is_settlement=0 AND archived=0""",
                 (acct_id,)
             ).fetchall()
             total = _fmt(sum(_fmt(b['budget'] * b['refill_factor']) for b in buckets))
@@ -645,6 +711,8 @@ def reset_buckets():
         return jsonify({'error': 'acct_id required'}), 400
     try:
         with db_conn() as conn:
+            if not _own_account(conn, acct_id):
+                return jsonify({'error': 'Account not found'}), 404
             settlement = conn.execute(
                 "SELECT id FROM buckets WHERE acct_id=? AND is_settlement=1", (acct_id,)
             ).fetchone()
@@ -695,6 +763,8 @@ def transfer():
         return jsonify({'error': 'Cannot transfer to the same bucket'}), 400
     try:
         with db_conn() as conn:
+            if not _own_bucket(conn, from_id) or not _own_bucket(conn, to_id):
+                return jsonify({'error': 'Bucket not found'}), 404
             archived = conn.execute(
                 "SELECT COUNT(*) FROM buckets WHERE id IN (?,?) AND archived=1", (from_id, to_id)
             ).fetchone()[0]
@@ -829,6 +899,8 @@ def create_upcoming(bkt_id):
         return jsonify({'error': 'Description is required'}), 400
     try:
         with db_conn() as conn:
+            if not _own_bucket(conn, bkt_id):
+                return jsonify({'error': 'Bucket not found'}), 404
             cur = conn.execute(
                 "INSERT INTO upcoming_expenses (bucket_id, description, amount, due_date, notes) VALUES (?,?,?,?,?)",
                 (bkt_id, description, amount, due_date, notes),
@@ -855,6 +927,8 @@ def update_upcoming(item_id):
         return jsonify({'error': 'Description is required'}), 400
     try:
         with db_conn() as conn:
+            if not _own_upcoming(conn, item_id):
+                return jsonify({'error': 'Item not found'}), 404
             conn.execute(
                 "UPDATE upcoming_expenses SET description=?, amount=?, due_date=?, notes=? WHERE id=?",
                 (description, amount, due_date, notes, item_id),
@@ -873,6 +947,8 @@ def update_upcoming(item_id):
 def delete_upcoming(item_id):
     try:
         with db_conn() as conn:
+            if not _own_upcoming(conn, item_id):
+                return jsonify({'error': 'Item not found'}), 404
             conn.execute("DELETE FROM upcoming_expenses WHERE id=?", (item_id,))
             conn.commit()
         return jsonify({'ok': True})
@@ -896,6 +972,9 @@ def get_transactions():
 
     try:
         with db_conn() as conn:
+            if not _own_account(conn, acct_id):
+                return jsonify({'transactions': [], 'total': 0, 'pending': 0,
+                                'page': 1, 'pages': 0})
             base_sql = """
                 FROM transactions t
                 JOIN buckets b ON b.id = t.bucket_id
@@ -904,6 +983,11 @@ def get_transactions():
             params = [acct_id]
 
             total  = conn.execute("SELECT COUNT(*) " + base_sql, params).fetchone()[0]
+            # Drives the "Post All" button: it labels itself with this and
+            # stays hidden once the ledger is fully posted.
+            pending = conn.execute(
+                "SELECT COUNT(*) " + base_sql + " AND t.posted=0", params
+            ).fetchone()[0]
             offset = (page - 1) * per_page
             rows   = conn.execute(
                 "SELECT t.id, t.tx_date, b.name AS bucket, t.bucket_id,"
@@ -942,6 +1026,7 @@ def get_transactions():
         return jsonify({
             'transactions': transactions,
             'total': total,
+            'pending': pending,
             'page': page,
             'pages': pages,
             'per_page': per_page,
@@ -964,10 +1049,10 @@ def create_transaction():
         with db_conn() as conn:
             if amount == 0:
                 return jsonify({'error': 'Amount cannot be zero.'}), 400
-            archived = conn.execute(
-                "SELECT archived FROM buckets WHERE id=?", (bucket_id,)
-            ).fetchone()
-            if archived and archived['archived']:
+            bucket = _own_bucket(conn, bucket_id, "b.name, b.archived")
+            if not bucket:
+                return jsonify({'error': 'Bucket not found'}), 404
+            if bucket['archived']:
                 return jsonify({'error': 'Cannot add a transaction to an archived bucket'}), 400
             if amount < 0:
                 balance = _fmt(conn.execute(
@@ -982,12 +1067,9 @@ def create_transaction():
             )
             conn.commit()
             tx_id  = cur.lastrowid
-            bucket = conn.execute(
-                "SELECT name FROM buckets WHERE id=?", (bucket_id,)
-            ).fetchone()
         return jsonify({
             'id': tx_id, 'tx_date': tx_date, 'bucket_id': bucket_id,
-            'bucket': bucket['name'] if bucket else '',
+            'bucket': bucket['name'],
             'amount': amount, 'note': note, 'posted': False,
         }), 201
     except Exception as e:
@@ -1006,10 +1088,12 @@ def update_transaction(tx_id):
         with db_conn() as conn:
             if amount == 0:
                 return jsonify({'error': 'Amount cannot be zero.'}), 400
-            archived = conn.execute(
-                "SELECT archived FROM buckets WHERE id=?", (bucket_id,)
-            ).fetchone()
-            if archived and archived['archived']:
+            if not _own_tx(conn, tx_id):
+                return jsonify({'error': 'Transaction not found'}), 404
+            bucket = _own_bucket(conn, bucket_id, "b.name, b.archived")
+            if not bucket:
+                return jsonify({'error': 'Bucket not found'}), 404
+            if bucket['archived']:
                 return jsonify({'error': 'Cannot add a transaction to an archived bucket'}), 400
             if amount < 0:
                 balance = _fmt(conn.execute(
@@ -1023,12 +1107,9 @@ def update_transaction(tx_id):
                 (tx_date, bucket_id, amount, note, tx_id),
             )
             conn.commit()
-            bucket = conn.execute(
-                "SELECT name FROM buckets WHERE id=?", (bucket_id,)
-            ).fetchone()
         return jsonify({
             'id': tx_id, 'tx_date': tx_date, 'bucket_id': bucket_id,
-            'bucket': bucket['name'] if bucket else '',
+            'bucket': bucket['name'],
             'amount': amount, 'note': note,
         })
     except Exception as e:
@@ -1040,10 +1121,10 @@ def update_transaction(tx_id):
 def delete_transaction(tx_id):
     try:
         with db_conn() as conn:
-            row = conn.execute(
-                "SELECT linked_tx_id FROM transactions WHERE id=?", (tx_id,)
-            ).fetchone()
-            linked_id = row['linked_tx_id'] if row else None
+            row = _own_tx(conn, tx_id, "t.linked_tx_id")
+            if not row:
+                return jsonify({'error': 'Transaction not found'}), 404
+            linked_id = row['linked_tx_id']
             if linked_id:
                 conn.execute("UPDATE transactions SET deleted=1 WHERE id IN (?,?)", (tx_id, linked_id))
             else:
@@ -1062,6 +1143,8 @@ def get_deleted_transactions():
         return jsonify([])
     try:
         with db_conn() as conn:
+            if not _own_account(conn, acct_id):
+                return jsonify([])
             rows = conn.execute(
                 """SELECT t.id, t.tx_date, b.name AS bucket, t.bucket_id,
                           t.amount, t.note, t.posted, t.linked_tx_id
@@ -1097,6 +1180,8 @@ def purge_deleted_transactions():
         return jsonify({'error': 'acct_id required'}), 400
     try:
         with db_conn() as conn:
+            if not _own_account(conn, acct_id):
+                return jsonify({'error': 'Account not found'}), 404
             result = conn.execute(
                 """DELETE FROM transactions
                    WHERE deleted=1 AND bucket_id IN (
@@ -1198,6 +1283,8 @@ def purge_transaction(tx_id):
 def post_transaction(tx_id):
     try:
         with db_conn() as conn:
+            if not _own_tx(conn, tx_id):
+                return jsonify({'error': 'Transaction not found'}), 404
             conn.execute("UPDATE transactions SET posted=1 WHERE id=?", (tx_id,))
             conn.commit()
         return jsonify({'ok': True})
@@ -1210,9 +1297,42 @@ def post_transaction(tx_id):
 def unpost_transaction(tx_id):
     try:
         with db_conn() as conn:
+            if not _own_tx(conn, tx_id):
+                return jsonify({'error': 'Transaction not found'}), 404
             conn.execute("UPDATE transactions SET posted=0 WHERE id=?", (tx_id,))
             conn.commit()
         return jsonify({'ok': True})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/transactions/post-all', methods=['POST'])
+@login_required
+def post_all_transactions():
+    """Post every pending transaction in one account.
+
+    Posting only flips a bookkeeping flag — no money moves and no balance can
+    go short — so this needs none of the solvency checks a refill does.
+    """
+    acct_id = request.json.get('acct_id')
+    if not acct_id:
+        return jsonify({'error': 'acct_id required'}), 400
+    try:
+        with db_conn() as conn:
+            owned = conn.execute(
+                "SELECT 1 FROM accounts WHERE id=? AND user_id=?",
+                (acct_id, current_user_id()),
+            ).fetchone()
+            if not owned:
+                return jsonify({'error': 'Account not found'}), 404
+            cur = conn.execute(
+                """UPDATE transactions SET posted=1
+                   WHERE posted=0 AND deleted=0
+                     AND bucket_id IN (SELECT id FROM buckets WHERE acct_id=?)""",
+                (acct_id,),
+            )
+            conn.commit()
+        return jsonify({'ok': True, 'count': cur.rowcount})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -1289,6 +1409,8 @@ def export_transactions():
         return jsonify({'error': 'acct_id required'}), 400
     try:
         with db_conn() as conn:
+            if not _own_account(conn, acct_id):
+                return jsonify({'error': 'Account not found'}), 404
             rows = conn.execute(
                 """SELECT t.tx_date, b.name AS bucket, t.amount, t.note, t.posted
                    FROM transactions t
@@ -1325,6 +1447,8 @@ def summary():
         return jsonify({})
     try:
         with db_conn() as conn:
+            if not _own_account(conn, acct_id):
+                return jsonify({})
             total_balance = _account_balance(conn, acct_id)
             bucket_count  = conn.execute(
                 "SELECT COUNT(*) FROM buckets WHERE acct_id=? AND archived=0", (acct_id,)

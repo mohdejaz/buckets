@@ -393,10 +393,28 @@ const Buckets = {
         <i class="bi bi-bucket fs-2 d-block mb-2 opacity-25"></i>No buckets yet.</td></tr>`;
       $('bucketsMoreWrap').classList.add('d-none');
       $('bucketsInfo').textContent = '';
+      $('bucketsFoot').classList.add('d-none');
       return;
     }
 
+    this._renderTotals();
     this._appendRows();
+  },
+
+  // The table pages in 25 rows at a time, but the footer sums every bucket the
+  // filter matched — a total that grew as you clicked "More" would be a lie.
+  _renderTotals() {
+    const sum = key => this._allRows.reduce((s, b) => s + parseFloat(b[key] || 0), 0);
+    const budget = sum('budget');
+    const balance = sum('balance');
+    const refillMtd = sum('refill_mtd');
+
+    $('bucketsTotalBudget').textContent = fmt(budget);
+    const balEl = $('bucketsTotalBalance');
+    balEl.textContent = fmt(balance);
+    balEl.className = `text-end font-monospace ${balClass(balance)}`;
+    $('bucketsTotalRefillMtd').textContent = fmt(refillMtd);
+    $('bucketsFoot').classList.remove('d-none');
   },
 
   _PAGE: 25,
@@ -504,10 +522,13 @@ const Buckets = {
     if (!form.checkValidity()) return;
 
     const id = $('bucketId').value;
+    // 0 is a meaningful factor (budget kept, never auto-refilled), and `|| 1.0`
+    // would quietly turn it back into a full refill — only a blank field defaults.
+    const factor = parseFloat($('bucketRefillFactor').value);
     const payload = {
       name: $('bucketName').value.trim(),
       budget: parseFloat($('bucketBudget').value) || 0,
-      refill_factor: parseFloat($('bucketRefillFactor').value) || 1.0,
+      refill_factor: Number.isFinite(factor) ? factor : 1.0,
       acct_id: State.accountId,
     };
     try {
@@ -526,7 +547,12 @@ const Buckets = {
 
   async refill(id) {
     const b = State.buckets.find(x => x.id === id);
-    const ok = await confirm(`Transfer ${fmt(b?.budget * b?.refill_factor)} from Settlement to "${b?.name}"?`, 'Refill', false);
+    const amount = (b?.budget || 0) * (b?.refill_factor ?? 0);
+    if (amount <= 0) {
+      showError(`"${b?.name}" has nothing to refill — its refill factor is ${b?.refill_factor ?? 0}.`);
+      return;
+    }
+    const ok = await confirm(`Transfer ${fmt(amount)} from Settlement to "${b?.name}"?`, 'Refill', false);
     if (!ok) return;
     try {
       const res = await api('POST', `/api/buckets/${id}/refill`);
@@ -696,6 +722,7 @@ const Transactions = {
     $('btnTxPageNewTx').addEventListener('click', () => this.openNew());
     $('btnTxPageDeposit').addEventListener('click', () => this.openNew(null, 'deposit'));
     $('btnExportTx').addEventListener('click', () => this.exportCsv());
+    $('btnPostAllTx').addEventListener('click', () => this.postAll());
     $('txBucket').addEventListener('change', () => {
       const bid = parseInt($('txBucket').value);
       this._applyAmountConstraint(bid);
@@ -711,6 +738,8 @@ const Transactions = {
     if (!State.accountId) {
       noAcct.classList.remove('d-none');
       card.classList.add('d-none');
+      this._pending = 0;
+      $('btnPostAllTx').classList.add('d-none');
       return;
     }
     noAcct.classList.add('d-none');
@@ -781,6 +810,34 @@ const Transactions = {
     } else {
       moreWrap.classList.add('d-none');
     }
+
+    // The count comes from the server, not the loaded rows — paging means the
+    // page may be showing 20 of 200, and "Post All" posts all 200.
+    this._pending = data.pending || 0;
+    const postAllBtn = $('btnPostAllTx');
+    if (this._pending) {
+      postAllBtn.classList.remove('d-none');
+      postAllBtn.title = `Post all ${this._pending} pending transaction(s)`;
+    } else {
+      postAllBtn.classList.add('d-none');
+    }
+  },
+
+  _pending: 0,
+
+  async postAll() {
+    if (!State.accountId) { showError('Please select an account first.'); return; }
+    if (!this._pending) { toast('Nothing pending to post'); return; }
+    const ok = await confirm(
+      `Post all ${this._pending} pending transaction(s) in this account?`, 'Post All', false);
+    if (!ok) return;
+    try {
+      const res = await api('POST', '/api/transactions/post-all', { acct_id: State.accountId });
+      toast(`Posted ${res.count} transaction(s)`);
+      await this.load();
+      await Buckets.load();
+      if (State.currentSection === 'dashboard') Dashboard.load();
+    } catch (e) { showError(e.message); }
   },
 
   loadMore() {
