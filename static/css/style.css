@@ -292,6 +292,16 @@ body {
 .table tbody tr:last-child td { border-bottom: none; }
 .table-hover tbody tr:hover { background: #f8fafc; }
 
+/* Column totals — a quiet echo of the header, pinned under the last row. */
+.table-foot td {
+  background: #f8fafc;
+  color: #334155;
+  font-weight: 600;
+  padding: .55rem 1rem;
+  border-top: 2px solid var(--border);
+  border-bottom: none;
+}
+
 /* Amount colors */
 .amount-pos, td.amount-pos { color: var(--positive) !important; font-weight: 600; }
 .amount-neg, td.amount-neg { color: var(--negative) !important; font-weight: 600; }
@@ -479,7 +489,9 @@ a { text-decoration: none; }
   #section-buckets .table-head th:nth-child(5),
   #section-buckets .table-head th:nth-child(6),
   #bucketsBody tr td:nth-child(5),
-  #bucketsBody tr td:nth-child(6) { display: none; }
+  #bucketsBody tr td:nth-child(6),
+  #bucketsFoot tr td:nth-child(5),
+  #bucketsFoot tr td:nth-child(6) { display: none; }
 
   /* Hide Posted column: #6 in Transactions (Note column shifts it), #5 in Bucket Detail */
   #section-transactions .table-head th:nth-child(6),

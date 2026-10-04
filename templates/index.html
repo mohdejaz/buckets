@@ -335,6 +335,17 @@
                 </tr>
               </thead>
               <tbody id="bucketsBody"></tbody>
+              <tfoot class="table-foot d-none" id="bucketsFoot">
+                <tr>
+                  <td></td>
+                  <td>Total</td>
+                  <td class="text-end font-monospace" id="bucketsTotalBudget">$0.00</td>
+                  <td class="text-end font-monospace" id="bucketsTotalBalance">$0.00</td>
+                  <td class="text-end font-monospace text-success" id="bucketsTotalRefillMtd">$0.00</td>
+                  <td></td>
+                  <td></td>
+                </tr>
+              </tfoot>
             </table>
           </div>
         </div>
@@ -394,6 +405,9 @@
           </button>
           <button class="btn btn-outline-primary btn-sm d-none" id="btnScanReceipt" title="Scan a receipt">
             <i class="bi bi-camera"></i><span class="d-none d-sm-inline ms-1">Scan Receipt</span>
+          </button>
+          <button class="btn btn-outline-secondary btn-sm d-none" id="btnPostAllTx" title="Post all pending transactions">
+            <i class="bi bi-check2-all"></i><span class="d-none d-sm-inline ms-1">Post All</span>
           </button>
           <button class="btn btn-outline-success btn-sm" id="btnExportTx" title="Export to CSV">
             <i class="bi bi-download"></i><span class="d-none d-sm-inline ms-1">Export CSV</span>
@@ -675,7 +689,7 @@
             <div class="col-6">
               <label class="form-label fw-semibold">Refill Factor</label>
               <input type="number" class="form-control" id="bucketRefillFactor" step="0.01" min="0" max="10" value="1.0"/>
-              <div class="form-text">e.g. 0.5 = refill half the budget</div>
+              <div class="form-text">e.g. 0.5 = refill half the budget; 0 = keep the budget, never refill</div>
             </div>
           </div>
         </form>
