@@ -17,7 +17,7 @@ Access is invite-only: there's no signup page, and you create each account yours
 
 ## Features
 
-- **Dashboard** — at-a-glance totals (balance, bucket count, transaction count, month-to-date spending) plus a quick bucket summary per account.
+- **Dashboard** — every account's balance as a tile grid with the combined total, so signing in lands on the numbers. A tile opens that account's buckets.
 - **Accounts & buckets** — organize money into accounts, split each into budget envelopes with per-bucket budgets and refill amounts.
 - **Transactions** — record income/spending against a bucket, post/unpost, soft-delete with restore, or purge permanently.
 - **Refills** — refill a single bucket or all buckets at once from the account's Settlement pool; reset a bucket's balance.
