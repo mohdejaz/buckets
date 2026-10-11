@@ -115,8 +115,6 @@ const State = {
   buckets: [],
   archivedBuckets: [],
   lastTxDate: null,
-  accountPage: 1,
-  accountsPerPage: 10,
   currentBucketId: null,
   settlementBucketId: null,
 };
@@ -137,48 +135,13 @@ const Accounts = {
     $('btnSaveAccountTransfer').addEventListener('click', () => this.saveTransfer());
   },
 
+  // Accounts are shown as dashboard tiles; this just keeps State and the
+  // sidebar selector current.
   async load() {
     try {
       State.accounts = await api('GET', '/api/accounts');
-      this.render();
       this.populateSelector();
     } catch (e) { showError(e.message); }
-  },
-
-  render() {
-    const body = $('accountsBody');
-    const data = State.accounts;
-    const page = State.accountPage;
-    const per = State.accountsPerPage;
-    const slice = data.slice((page - 1) * per, page * per);
-
-    if (!slice.length) {
-      body.innerHTML = `<tr><td colspan="4" class="text-center text-muted py-4">
-        <i class="bi bi-bank2 fs-2 d-block mb-2 opacity-25"></i>No accounts yet.</td></tr>`;
-    } else {
-      body.innerHTML = slice.map((a, i) => `
-        <tr>
-          <td class="text-muted">${(page - 1) * per + i + 1}</td>
-          <td><strong>${esc(a.name)}</strong></td>
-          <td class="text-end font-monospace ${balClass(a.balance)}">${fmt(a.balance)}</td>
-          <td class="text-center">
-            <button class="action-btn action-btn-select me-1" onclick="Accounts.select(${a.id})">
-              <i class="bi bi-check2-circle me-1"></i>Select
-            </button>
-            <button class="action-btn action-btn-edit me-1" onclick="Accounts.openEdit(${a.id})">
-              <i class="bi bi-pencil me-1"></i>Edit
-            </button>
-            <button class="action-btn action-btn-delete" onclick="Accounts.delete(${a.id})">
-              <i class="bi bi-trash me-1"></i>Delete
-            </button>
-          </td>
-        </tr>`).join('');
-    }
-
-    buildPagination('accountsPagination', page, Math.max(1, Math.ceil(data.length / per)), p => {
-      State.accountPage = p;
-      this.render();
-    });
   },
 
   populateSelector() {
@@ -186,14 +149,6 @@ const Accounts = {
     const current = State.accountId;
     sel.innerHTML = '<option value="">— Select account —</option>' +
       State.accounts.map(a => `<option value="${a.id}" ${a.id === current ? 'selected' : ''}>${esc(a.name)}</option>`).join('');
-  },
-
-  select(id) {
-    State.accountId = id;
-    const a = State.accounts.find(x => x.id === id);
-    $('accountSelect').value = id;
-    toast(`Account "${a?.name}" selected`);
-    App.nav('dashboard');
   },
 
   openTransfer() {
@@ -236,7 +191,7 @@ const Accounts = {
       toast('Transfer complete');
       this.transferModal.hide();
       await this.load();
-      if (State.currentSection === 'dashboard') Dashboard.load();
+      App.refreshBalances();
       if (State.currentSection === 'buckets') Buckets.load();
     } catch (e) { showError(e.message); }
   },
@@ -267,16 +222,21 @@ const Accounts = {
     const id = $('accountId').value;
     const name = $('accountName').value.trim();
     try {
+      let created = null;
       if (id) {
         await api('PUT', `/api/accounts/${id}`, { name });
         toast('Account updated');
       } else {
-        await api('POST', '/api/accounts', { name });
+        created = await api('POST', '/api/accounts', { name });
         toast('Account created');
       }
       this.modal.hide();
       await this.load();
-      if (State.currentSection === 'dashboard') Dashboard.load();
+      if (created) {
+        Dashboard.openAccount(created.id);
+      } else {
+        App.refreshBalances();
+      }
     } catch (e) { showError(e.message); }
   },
 
@@ -288,7 +248,7 @@ const Accounts = {
       await api('DELETE', `/api/accounts/${id}`);
       if (State.accountId === id) { State.accountId = null; $('accountSelect').value = ''; }
       toast('Account deleted');
-      await this.load();
+      App.nav('dashboard');
     } catch (e) { showError(e.message); }
   },
 };
@@ -541,7 +501,7 @@ const Buckets = {
       }
       this.modal.hide();
       await this.load();
-      if (State.currentSection === 'dashboard') Dashboard.load();
+      App.refreshBalances();
     } catch (e) { showError(e.message); }
   },
 
@@ -558,7 +518,7 @@ const Buckets = {
       const res = await api('POST', `/api/buckets/${id}/refill`);
       toast(`Refilled ${fmt(res.amount)}`);
       await this.load();
-      if (State.currentSection === 'dashboard') Dashboard.load();
+      App.refreshBalances();
     } catch (e) { showError(e.message); }
   },
 
@@ -581,7 +541,7 @@ const Buckets = {
       await api('POST', `/api/buckets/${id}/archive`);
       toast('Bucket archived');
       await this.load();
-      if (State.currentSection === 'dashboard') Dashboard.load();
+      App.refreshBalances();
     } catch (e) { showError(e.message); }
   },
 
@@ -593,7 +553,7 @@ const Buckets = {
       await api('POST', `/api/buckets/${id}/unarchive`);
       toast('Bucket restored');
       await this.load();
-      if (State.currentSection === 'dashboard') Dashboard.load();
+      App.refreshBalances();
     } catch (e) { showError(e.message); }
   },
 
@@ -675,7 +635,7 @@ const Buckets = {
       const res = await api('POST', '/api/buckets/refill-all', { acct_id: State.accountId });
       toast(`Refilled ${res.count} bucket(s)`);
       await this.load();
-      if (State.currentSection === 'dashboard') Dashboard.load();
+      App.refreshBalances();
     } catch (e) { showError(e.message); }
   },
 
@@ -836,7 +796,7 @@ const Transactions = {
       toast(`Posted ${res.count} transaction(s)`);
       await this.load();
       await Buckets.load();
-      if (State.currentSection === 'dashboard') Dashboard.load();
+      App.refreshBalances();
     } catch (e) { showError(e.message); }
   },
 
@@ -917,7 +877,7 @@ const Transactions = {
       await this.load();
       if (State.currentSection === 'buckets' || State.currentSection === 'transactions') await Buckets.load();
       if (State.currentSection === 'bucket-detail') await BucketDetail.load(State.currentBucketId);
-      if (State.currentSection === 'dashboard') Dashboard.load();
+      App.refreshBalances();
     } catch (e) { showError(e.message); }
   },
 
@@ -1786,14 +1746,71 @@ const Trash = {
 // DASHBOARD
 // ============================================================
 const Dashboard = {
+  // Every account's balance is the landing view. Accounts.load() also keeps the
+  // sidebar selector in sync, so this doubles as the first-paint data load.
   async load() {
-    if (!State.accountId) {
-      $('dashboardNoAccount').classList.remove('d-none');
-      $('dashboardContent').classList.add('d-none');
-      return;
+    try {
+      await Accounts.load();
+    } catch (e) { showError(e.message); return; }
+
+    // With a single account there is nothing to choose — make it the active one
+    // so Buckets and Transactions work without a detour. The overview still shows.
+    if (!State.accountId && State.accounts.length === 1) {
+      State.accountId = State.accounts[0].id;
+      $('accountSelect').value = State.accountId;
     }
-    $('dashboardNoAccount').classList.add('d-none');
-    $('dashboardContent').classList.remove('d-none');
+    this.render();
+  },
+
+  // One tile per account, plus the total of them all.
+  render() {
+    const accounts = State.accounts;
+    const total = accounts.reduce((sum, a) => sum + (parseFloat(a.balance) || 0), 0);
+
+    $('netWorthCount').textContent = `${accounts.length} account${accounts.length === 1 ? '' : 's'}`;
+    const totalEl = $('netWorthValue');
+    totalEl.textContent = fmt(total);
+    totalEl.className = `net-worth-value ${balClass(total)}`;
+
+    $('netWorthRow').classList.toggle('d-none', accounts.length === 0);
+    $('accountsOverviewEmpty').classList.toggle('d-none', accounts.length > 0);
+
+    // The add tile sits in the grid rather than the header — it belongs with
+    // the things it creates, and the header stays uncluttered as actions grow.
+    const addTile = `
+      <button type="button" class="account-tile account-tile--add" onclick="Accounts.openNew()">
+        <span class="account-tile-add-icon"><i class="bi bi-plus-lg"></i></span>
+        <span class="account-tile-add-text">New account</span>
+      </button>`;
+
+    $('accountTiles').innerHTML = accounts.map(a => `
+      <button type="button" class="account-tile${a.id === State.accountId ? ' active' : ''}"
+              onclick="Dashboard.openAccount(${a.id})">
+        <span class="account-tile-name">${esc(a.name)}</span>
+        <span class="account-tile-balance ${balClass(a.balance)}">${fmt(a.balance)}</span>
+        <span class="account-tile-cta">Open dashboard <i class="bi bi-arrow-right"></i></span>
+      </button>`).join('') + (accounts.length ? addTile : '');
+  },
+
+  // A tile is a drill-down into that account's own dashboard.
+  openAccount(id) {
+    State.accountId = id;
+    $('accountSelect').value = id;
+    App.nav('account-detail');
+  },
+};
+
+// ============================================================
+// ACCOUNT DETAIL — one account's dashboard
+// ============================================================
+const AccountDetail = {
+  async load() {
+    if (!State.accountId) { App.nav('dashboard'); return; }
+
+    const acct = State.accounts.find(a => a.id === State.accountId);
+    const name = acct ? acct.name : 'Account';
+    $('acctDetailName').textContent = name;
+    $('topbarTitle').textContent = name;
 
     try {
       const [summary, buckets] = await Promise.all([
@@ -1836,10 +1853,10 @@ const Dashboard = {
 // ============================================================
 // Navigation
 // ============================================================
-const SECTIONS = ['dashboard', 'accounts', 'buckets', 'transactions', 'bucket-detail', 'iou', 'trash'];
+const SECTIONS = ['dashboard', 'account-detail', 'buckets', 'transactions', 'bucket-detail', 'iou', 'trash'];
 const SECTION_LABELS = {
   dashboard: 'Dashboard',
-  accounts: 'Accounts',
+  'account-detail': 'Account',
   buckets: 'Buckets',
   transactions: 'Transactions',
   'bucket-detail': 'Bucket',
@@ -1848,13 +1865,20 @@ const SECTION_LABELS = {
 };
 
 const App = {
+  // Anything that moves money refreshes whichever balance view is on screen.
+  refreshBalances() {
+    if (State.currentSection === 'dashboard')      Dashboard.load();
+    if (State.currentSection === 'account-detail') AccountDetail.load();
+  },
+
   nav(section) {
     State.currentSection = section;
     SECTIONS.forEach(s => {
       const el = $(`section-${s}`);
       el.classList.toggle('d-none', s !== section);
     });
-    const sidebarSection = section === 'bucket-detail' ? 'buckets' : section;
+    const sidebarSection = section === 'bucket-detail' ? 'buckets'
+      : section === 'account-detail' ? 'dashboard' : section;
     document.querySelectorAll('.sidebar-link').forEach(a => {
       a.classList.toggle('active', a.dataset.section === sidebarSection);
     });
@@ -1863,7 +1887,7 @@ const App = {
     $('sidebarUpcoming').classList.toggle('d-none', section !== 'bucket-detail');
 
     if (section === 'dashboard')     Dashboard.load();
-    if (section === 'accounts')      Accounts.load();
+    if (section === 'account-detail') AccountDetail.load();
     if (section === 'buckets')       Buckets.load();
     if (section === 'transactions')  { Buckets.load(); Transactions.load(); }
     if (section === 'bucket-detail') BucketDetail.load(State.currentBucketId);
@@ -1902,9 +1926,7 @@ const App = {
     $('accountSelect').addEventListener('change', async () => {
       const val = $('accountSelect').value;
       State.accountId = val ? parseInt(val) : null;
-      if (State.currentSection !== 'accounts') {
-        this.nav(State.currentSection);
-      }
+      this.nav(State.currentSection);
     });
 
     // Modules init
@@ -1917,11 +1939,11 @@ const App = {
     ChangePassword.init();
     Intro.init();
 
-    // Initial data load
-    Accounts.load().then(() => {
-      this.nav('dashboard');
-      Trash.refreshBadge();
-    });
+    $('btnDashRefresh').addEventListener('click', () => Dashboard.load());
+
+    // Initial data load — Dashboard.load() pulls the accounts it lists.
+    this.nav('dashboard');
+    Trash.refreshBadge();
   },
 };
 

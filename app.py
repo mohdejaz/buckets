@@ -382,11 +382,26 @@ def update_account(acct_id):
 def delete_account(acct_id):
     try:
         with db_conn() as conn:
+            if not _own_account(conn, acct_id):
+                return jsonify({'error': 'Account not found'}), 404
+            # Every account is born with a Settlement bucket, so counting buckets
+            # alone would make deletion impossible. What must be protected is real
+            # content: any bucket the user made, or any transaction history.
             cnt = conn.execute(
-                "SELECT COUNT(*) FROM buckets WHERE acct_id=?", (acct_id,)
+                "SELECT COUNT(*) FROM buckets WHERE acct_id=? AND is_settlement=0",
+                (acct_id,),
             ).fetchone()[0]
             if cnt > 0:
                 return jsonify({'error': 'Cannot delete account with buckets'}), 400
+            tx_cnt = conn.execute(
+                """SELECT COUNT(*) FROM transactions t JOIN buckets b ON b.id=t.bucket_id
+                   WHERE b.acct_id=?""",
+                (acct_id,),
+            ).fetchone()[0]
+            if tx_cnt > 0:
+                return jsonify({'error': 'Cannot delete account with transactions'}), 400
+            # Only the empty Settlement bucket is left — it goes with the account.
+            conn.execute("DELETE FROM buckets WHERE acct_id=?", (acct_id,))
             conn.execute(
                 "DELETE FROM accounts WHERE id=? AND user_id=?",
                 (acct_id, current_user_id()),
