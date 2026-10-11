@@ -47,11 +47,6 @@
         </a>
       </li>
       <li class="nav-item">
-        <a class="nav-link sidebar-link" href="#" data-section="accounts">
-          <i class="bi bi-bank2"></i><span>Accounts</span>
-        </a>
-      </li>
-      <li class="nav-item">
         <a class="nav-link sidebar-link" href="#" data-section="buckets">
           <i class="bi bi-bucket-fill"></i><span>Buckets</span>
         </a>
@@ -142,116 +137,130 @@
     <section class="content-section" id="section-dashboard">
       <div class="section-header">
         <h2 class="section-title"><i class="bi bi-speedometer2 me-2"></i>Dashboard</h2>
-      </div>
-
-      <div id="dashboardNoAccount" class="empty-state">
-        <div class="empty-icon"><i class="bi bi-bank2"></i></div>
-        <h5>No account selected</h5>
-        <p class="text-muted">Select or create an account to see your dashboard.</p>
-        <button class="btn btn-primary" onclick="App.nav('accounts')">
-          <i class="bi bi-plus-circle me-1"></i>Manage Accounts
-        </button>
-      </div>
-
-      <div id="dashboardContent" class="d-none">
-        <div class="row g-4 mb-4">
-          <div class="col-sm-6 col-xl-3">
-            <div class="stat-card stat-card--blue">
-              <div class="stat-icon"><i class="bi bi-wallet2"></i></div>
-              <div class="stat-body">
-                <div class="stat-label">Total Balance</div>
-                <div class="stat-value" id="statBalance">—</div>
-              </div>
-            </div>
-          </div>
-          <div class="col-sm-6 col-xl-3">
-            <div class="stat-card stat-card--green">
-              <div class="stat-icon"><i class="bi bi-bucket-fill"></i></div>
-              <div class="stat-body">
-                <div class="stat-label">Buckets</div>
-                <div class="stat-value" id="statBuckets">—</div>
-              </div>
-            </div>
-          </div>
-          <div class="col-sm-6 col-xl-3">
-            <div class="stat-card stat-card--purple">
-              <div class="stat-icon"><i class="bi bi-receipt"></i></div>
-              <div class="stat-body">
-                <div class="stat-label">Transactions</div>
-                <div class="stat-value" id="statTxCount">—</div>
-              </div>
-            </div>
-          </div>
-          <div class="col-sm-6 col-xl-3">
-            <div class="stat-card stat-card--red">
-              <div class="stat-icon"><i class="bi bi-graph-down-arrow"></i></div>
-              <div class="stat-body">
-                <div class="stat-label">Spent This Month</div>
-                <div class="stat-value" id="statSpending">—</div>
-              </div>
-            </div>
-          </div>
+        <div class="d-flex gap-2 flex-wrap">
+          <button class="btn btn-outline-secondary btn-sm" id="btnDashRefresh" title="Reload balances">
+            <i class="bi bi-arrow-clockwise me-1"></i>Refresh
+          </button>
+          <button class="btn btn-outline-secondary btn-sm" id="btnAccountTransfer"
+                  title="Move funds between accounts">
+            <i class="bi bi-arrow-left-right me-1"></i>Transfer
+          </button>
         </div>
+      </div>
 
-        <!-- Quick Buckets Preview -->
-        <div class="card shadow-sm">
-          <div class="card-header d-flex justify-content-between align-items-center">
-            <span><i class="bi bi-bucket-fill me-2 text-primary"></i>Bucket Summary</span>
-            <button class="btn btn-sm btn-outline-primary" onclick="App.nav('buckets')">
-              View All <i class="bi bi-arrow-right ms-1"></i>
-            </button>
+      <!-- All accounts: the landing view — every balance at a glance -->
+      <div class="card shadow-sm mb-4">
+        <div class="card-header">
+          <span><i class="bi bi-bank2 me-2 text-primary"></i>Account Balances</span>
+        </div>
+        <div class="card-body">
+          <div class="net-worth" id="netWorthRow">
+            <div class="net-worth-label">Total across <span id="netWorthCount">0</span></div>
+            <div class="net-worth-value" id="netWorthValue">—</div>
           </div>
-          <div class="card-body p-0">
-            <div class="table-responsive">
-              <table class="table table-hover mb-0">
-                <thead class="table-head">
-                  <tr>
-                    <th>Bucket</th>
-                    <th class="text-end">Budget</th>
-                    <th class="text-end">Balance</th>
-                    <th class="text-end">Usage</th>
-                  </tr>
-                </thead>
-                <tbody id="dashBucketsBody"></tbody>
-              </table>
-            </div>
+          <div class="account-tiles" id="accountTiles"></div>
+          <div id="accountsOverviewEmpty" class="empty-state d-none">
+            <div class="empty-icon"><i class="bi bi-bank2"></i></div>
+            <h5>No accounts yet</h5>
+            <p class="text-muted">Create your first account to start tracking balances.</p>
+            <button class="btn btn-primary" id="btnNewAccount">
+              <i class="bi bi-plus-circle me-1"></i>New Account
+            </button>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- ======= ACCOUNTS SECTION ======= -->
-    <section class="content-section d-none" id="section-accounts">
+    <!-- ======= ACCOUNT DETAIL SECTION ======= -->
+    <section class="content-section d-none" id="section-account-detail">
       <div class="section-header">
-        <h2 class="section-title"><i class="bi bi-bank2 me-2"></i>Accounts</h2>
-        <div class="d-flex gap-2">
-          <button class="btn btn-outline-secondary" id="btnAccountTransfer" title="Move funds between accounts">
-            <i class="bi bi-arrow-left-right me-1"></i>Transfer Funds
+        <div class="d-flex align-items-center gap-2 flex-wrap">
+          <button class="btn btn-sm btn-outline-secondary" onclick="App.nav('dashboard')">
+            <i class="bi bi-arrow-left me-1"></i>All accounts
           </button>
-          <button class="btn btn-primary" id="btnNewAccount">
-            <i class="bi bi-plus-circle me-1"></i>New Account
+          <h2 class="section-title mb-0">
+            <i class="bi bi-bank2 me-2"></i><span id="acctDetailName">Account</span>
+          </h2>
+        </div>
+        <div class="d-flex gap-2 flex-wrap">
+          <button class="btn btn-sm btn-outline-secondary" onclick="App.nav('buckets')">
+            <i class="bi bi-bucket-fill me-1"></i>Buckets
+          </button>
+          <button class="btn btn-sm btn-outline-secondary" onclick="App.nav('transactions')">
+            <i class="bi bi-arrow-left-right me-1"></i>Transactions
+          </button>
+          <button class="btn btn-sm btn-outline-secondary" onclick="Accounts.openEdit(State.accountId)"
+                  title="Rename this account">
+            <i class="bi bi-pencil me-1"></i>Rename
+          </button>
+          <button class="btn btn-sm btn-outline-danger" onclick="Accounts.delete(State.accountId)"
+                  title="Delete this account">
+            <i class="bi bi-trash me-1"></i>Delete
           </button>
         </div>
       </div>
 
-      <div class="card shadow-sm">
-        <div class="card-body p-0">
-          <div class="table-responsive">
-            <table class="table table-hover mb-0" id="accountsTable">
-              <thead class="table-head">
-                <tr>
-                  <th>#</th>
-                  <th>Account Name</th>
-                  <th class="text-end">Balance</th>
-                  <th class="text-center">Actions</th>
-                </tr>
-              </thead>
-              <tbody id="accountsBody"></tbody>
-            </table>
+      <div class="row g-4 mb-4">
+        <div class="col-sm-6 col-xl-3">
+          <div class="stat-card stat-card--blue">
+            <div class="stat-icon"><i class="bi bi-wallet2"></i></div>
+            <div class="stat-body">
+              <div class="stat-label">Account Balance</div>
+              <div class="stat-value" id="statBalance">—</div>
+            </div>
           </div>
         </div>
-        <div class="card-footer">
-          <div id="accountsPagination"></div>
+        <div class="col-sm-6 col-xl-3">
+          <div class="stat-card stat-card--green">
+            <div class="stat-icon"><i class="bi bi-bucket-fill"></i></div>
+            <div class="stat-body">
+              <div class="stat-label">Buckets</div>
+              <div class="stat-value" id="statBuckets">—</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+          <div class="stat-card stat-card--purple">
+            <div class="stat-icon"><i class="bi bi-receipt"></i></div>
+            <div class="stat-body">
+              <div class="stat-label">Transactions</div>
+              <div class="stat-value" id="statTxCount">—</div>
+            </div>
+          </div>
+        </div>
+        <div class="col-sm-6 col-xl-3">
+          <div class="stat-card stat-card--red">
+            <div class="stat-icon"><i class="bi bi-graph-down-arrow"></i></div>
+            <div class="stat-body">
+              <div class="stat-label">Spent This Month</div>
+              <div class="stat-value" id="statSpending">—</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Quick Buckets Preview -->
+      <div class="card shadow-sm">
+        <div class="card-header d-flex justify-content-between align-items-center">
+          <span><i class="bi bi-bucket-fill me-2 text-primary"></i>Bucket Summary</span>
+          <button class="btn btn-sm btn-outline-primary" onclick="App.nav('buckets')">
+            View All <i class="bi bi-arrow-right ms-1"></i>
+          </button>
+        </div>
+        <div class="card-body p-0">
+          <div class="table-responsive">
+            <table class="table table-hover mb-0">
+              <thead class="table-head">
+                <tr>
+                  <th>Bucket</th>
+                  <th class="text-end">Budget</th>
+                  <th class="text-end">Balance</th>
+                  <th class="text-end">Usage</th>
+                </tr>
+              </thead>
+              <tbody id="dashBucketsBody"></tbody>
+            </table>
+          </div>
         </div>
       </div>
     </section>

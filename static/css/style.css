@@ -260,6 +260,92 @@ body {
 .stat-card--red    .stat-icon { background: #fecdd3; }
 
 /* ============================================================
+   ACCOUNT BALANCES (dashboard landing)
+   ============================================================ */
+.net-worth {
+  display: flex;
+  align-items: baseline;
+  gap: .75rem;
+  flex-wrap: wrap;
+  padding-bottom: .9rem;
+  margin-bottom: 1rem;
+  border-bottom: 1px dashed var(--border);
+}
+.net-worth-label {
+  font-size: .75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: .05em;
+  color: #64748b;
+}
+.net-worth-value { font-size: 1.9rem; font-weight: 700; color: #1e293b; }
+
+/* One tile per account — the balance is the headline, the name the caption. */
+.account-tiles {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: .85rem;
+}
+.account-tile {
+  display: flex;
+  flex-direction: column;
+  gap: .15rem;
+  text-align: left;
+  padding: .9rem 1rem;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition: transform .15s, box-shadow .15s, border-color .15s;
+}
+.account-tile:hover { transform: translateY(-2px); box-shadow: var(--shadow-md); border-left-color: var(--primary); }
+.account-tile.active { border-left-color: var(--primary); background: var(--primary-light); }
+.account-tile-name {
+  font-size: .8rem;
+  font-weight: 600;
+  color: #475569;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.account-tile-balance { font-size: 1.35rem; font-weight: 700; font-variant-numeric: tabular-nums; color: #1e293b; }
+.account-tile-cta { font-size: .68rem; text-transform: uppercase; letter-spacing: .05em; color: #94a3b8; }
+.account-tile.active .account-tile-cta { color: var(--primary); }
+
+/* The add tile reads as an outline of a tile, not a tile */
+.account-tile--add {
+  align-items: center;
+  justify-content: center;
+  gap: .4rem;
+  background: transparent;
+  border: 1px dashed #cbd5e1;
+  border-left: 1px dashed #cbd5e1;
+  box-shadow: none;
+  color: #64748b;
+  min-height: 100px;
+}
+.account-tile--add:hover {
+  border-color: var(--primary);
+  border-left-color: var(--primary);
+  background: var(--primary-light);
+  color: var(--primary);
+}
+.account-tile-add-icon { font-size: 1.3rem; line-height: 1; }
+.account-tile-add-text { font-size: .82rem; font-weight: 600; }
+
+/* A quiet heading that separates the selected account from the totals above */
+.dash-subhead {
+  font-size: .78rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  color: #64748b;
+  margin-bottom: .75rem;
+}
+
+/* ============================================================
    TABLES
    ============================================================ */
 .table-head th {
@@ -477,6 +563,10 @@ a { text-decoration: none; }
   .main-content { margin-left: 0 !important; }
   .content-section { padding: 1rem; }
   .stat-value { font-size: 1.2rem; }
+  .net-worth-value { font-size: 1.5rem; }
+  .account-tiles { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: .6rem; }
+  .account-tile { padding: .7rem .8rem; }
+  .account-tile-balance { font-size: 1.1rem; }
   .section-header { flex-direction: column; align-items: flex-start; }
 
   /* Larger touch targets */
