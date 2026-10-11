@@ -236,6 +236,8 @@ const Accounts = {
         Dashboard.openAccount(created.id);
       } else {
         App.refreshBalances();
+        // A rename from the Buckets header has to repaint that header.
+        if (State.currentSection === 'buckets') Buckets.render();
       }
     } catch (e) { showError(e.message); }
   },
@@ -301,6 +303,11 @@ const Buckets = {
     const card = $('bucketsCard');
     const body = $('bucketsBody');
     const banner = $('settlementBanner');
+
+    // Header doubles as the account header while an account is open.
+    const acct = State.accounts.find(a => a.id === State.accountId);
+    $('bucketsAccountName').textContent = acct ? acct.name : 'Buckets';
+    $('bucketsAccountMenu').classList.toggle('d-none', !State.accountId);
 
     if (!State.accountId) {
       noAcct.classList.remove('d-none');
@@ -1788,75 +1795,24 @@ const Dashboard = {
               onclick="Dashboard.openAccount(${a.id})">
         <span class="account-tile-name">${esc(a.name)}</span>
         <span class="account-tile-balance ${balClass(a.balance)}">${fmt(a.balance)}</span>
-        <span class="account-tile-cta">Open dashboard <i class="bi bi-arrow-right"></i></span>
+        <span class="account-tile-cta">View buckets <i class="bi bi-arrow-right"></i></span>
       </button>`).join('') + (accounts.length ? addTile : '');
   },
 
-  // A tile is a drill-down into that account's own dashboard.
+  // A tile is a drill-down into that account's buckets — the per-account view.
   openAccount(id) {
     State.accountId = id;
     $('accountSelect').value = id;
-    App.nav('account-detail');
-  },
-};
-
-// ============================================================
-// ACCOUNT DETAIL — one account's dashboard
-// ============================================================
-const AccountDetail = {
-  async load() {
-    if (!State.accountId) { App.nav('dashboard'); return; }
-
-    const acct = State.accounts.find(a => a.id === State.accountId);
-    const name = acct ? acct.name : 'Account';
-    $('acctDetailName').textContent = name;
-    $('topbarTitle').textContent = name;
-
-    try {
-      const [summary, buckets] = await Promise.all([
-        api('GET', `/api/summary?acct_id=${State.accountId}`),
-        api('GET', `/api/buckets?acct_id=${State.accountId}`),
-      ]);
-
-      $('statBalance').textContent = fmt(summary.total_balance);
-      $('statBuckets').textContent = summary.bucket_count;
-      $('statTxCount').textContent = summary.tx_count.toLocaleString();
-      $('statSpending').textContent = fmt(summary.month_spending);
-
-      const body = $('dashBucketsBody');
-      if (!buckets.length) {
-        body.innerHTML = `<tr><td colspan="4" class="text-center text-muted py-3">No buckets yet.</td></tr>`;
-      } else {
-        body.innerHTML = buckets.slice(0, 8).map(b => {
-          const pct = b.budget > 0 ? Math.min(200, Math.round((b.balance / b.budget) * 100)) : 0;
-          const barClass = pct >= 100 ? 'usage-ok' : pct >= 50 ? 'usage-warn' : 'usage-over';
-          return `
-          <tr>
-            <td><strong>${esc(b.name)}</strong></td>
-            <td class="text-end font-monospace">${fmt(b.budget)}</td>
-            <td class="text-end font-monospace ${balClass(b.balance)}">${fmt(b.balance)}</td>
-            <td>
-              <div class="usage-bar-wrap">
-                <div class="usage-bar-bg">
-                  <div class="usage-bar-fill ${barClass}" style="width:${Math.min(100, pct)}%"></div>
-                </div>
-                <div class="usage-pct">${pct}%</div>
-              </div>
-            </td>
-          </tr>`;
-        }).join('');
-      }
-    } catch (e) { showError(e.message); }
+    App.nav('buckets');
   },
 };
 
 // ============================================================
 // Navigation
 // ============================================================
-const SECTIONS = ['dashboard', 'account-detail', 'buckets', 'transactions', 'bucket-detail', 'iou', 'trash'];
+const SECTIONS = ['dashboard', 'buckets', 'transactions', 'bucket-detail', 'iou', 'trash'];
 const SECTION_LABELS = {
   dashboard: 'Dashboard',
-  'account-detail': 'Account',
   buckets: 'Buckets',
   transactions: 'Transactions',
   'bucket-detail': 'Bucket',
@@ -1866,9 +1822,10 @@ const SECTION_LABELS = {
 
 const App = {
   // Anything that moves money refreshes whichever balance view is on screen.
+  // The Buckets page refreshes through Buckets.load(), which every money-moving
+  // path already calls.
   refreshBalances() {
-    if (State.currentSection === 'dashboard')      Dashboard.load();
-    if (State.currentSection === 'account-detail') AccountDetail.load();
+    if (State.currentSection === 'dashboard') Dashboard.load();
   },
 
   nav(section) {
@@ -1877,8 +1834,7 @@ const App = {
       const el = $(`section-${s}`);
       el.classList.toggle('d-none', s !== section);
     });
-    const sidebarSection = section === 'bucket-detail' ? 'buckets'
-      : section === 'account-detail' ? 'dashboard' : section;
+    const sidebarSection = section === 'bucket-detail' ? 'buckets' : section;
     document.querySelectorAll('.sidebar-link').forEach(a => {
       a.classList.toggle('active', a.dataset.section === sidebarSection);
     });
@@ -1887,7 +1843,6 @@ const App = {
     $('sidebarUpcoming').classList.toggle('d-none', section !== 'bucket-detail');
 
     if (section === 'dashboard')     Dashboard.load();
-    if (section === 'account-detail') AccountDetail.load();
     if (section === 'buckets')       Buckets.load();
     if (section === 'transactions')  { Buckets.load(); Transactions.load(); }
     if (section === 'bucket-detail') BucketDetail.load(State.currentBucketId);
