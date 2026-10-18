@@ -320,7 +320,8 @@ def get_accounts():
     try:
         with db_conn() as conn:
             rows = conn.execute(
-                "SELECT id, name FROM accounts WHERE user_id=? ORDER BY name",
+                "SELECT id, name FROM accounts WHERE user_id=?"
+                " ORDER BY sort_order, id",
                 (current_user_id(),),
             ).fetchall()
             accounts = [
@@ -373,6 +374,39 @@ def update_account(acct_id):
             conn.commit()
             balance = _account_balance(conn, acct_id)
         return jsonify({'id': acct_id, 'name': name, 'balance': balance})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/accounts/reorder', methods=['POST'])
+@login_required
+def reorder_accounts():
+    """Store the dashboard's tile order.
+
+    The client sends the full id list in its new order -- it already has every
+    tile on screen, and a whole list is both simpler and safer than a sequence
+    of swaps: a partial list could only ever mean a lost account, so it is
+    rejected rather than guessed at. Ranks are renumbered 1..n, so the stored
+    order never drifts no matter how often it is rearranged.
+    """
+    ids = (request.json or {}).get('ids')
+    if not isinstance(ids, list) or not all(isinstance(i, int) for i in ids):
+        return jsonify({'error': 'ids must be a list of account ids'}), 400
+    try:
+        with db_conn() as conn:
+            owned = {
+                r['id'] for r in conn.execute(
+                    "SELECT id FROM accounts WHERE user_id=?", (current_user_id(),)
+                ).fetchall()
+            }
+            if set(ids) != owned or len(ids) != len(owned):
+                return jsonify({'error': 'ids must list each of your accounts once'}), 400
+            conn.executemany(
+                "UPDATE accounts SET sort_order=? WHERE id=? AND user_id=?",
+                [(n, acct_id, current_user_id()) for n, acct_id in enumerate(ids, 1)],
+            )
+            conn.commit()
+        return jsonify({'ok': True})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 

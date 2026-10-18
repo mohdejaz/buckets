@@ -75,9 +75,10 @@ def init_db(seed=True):
         );
 
         CREATE TABLE IF NOT EXISTS accounts (
-            id      INTEGER PRIMARY KEY AUTOINCREMENT,
-            name    TEXT NOT NULL,
-            user_id INTEGER NOT NULL,
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            name       TEXT NOT NULL,
+            user_id    INTEGER NOT NULL,
+            sort_order INTEGER NOT NULL DEFAULT 0,
             FOREIGN KEY (user_id) REFERENCES users(id)
         );
 
@@ -229,6 +230,39 @@ def init_db(seed=True):
         FOR EACH ROW WHEN NEW.sort_order = 0
         BEGIN
             UPDATE transactions SET sort_order = NEW.id WHERE id = NEW.id;
+        END;
+    """)
+
+    # ── Schema migration: add sort_order to accounts ──────────────────
+    # The dashboard lets the user drag account tiles into the order they think
+    # in, which a name cannot express. Seeded per user in the alphabetical order
+    # the tiles were drawn in until now, so upgrading moves nothing on screen.
+    acct_cols = [r[1] for r in cur.execute("PRAGMA table_info(accounts)").fetchall()]
+    if 'sort_order' not in acct_cols:
+        cur.execute(
+            "ALTER TABLE accounts ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0"
+        )
+        for (uid,) in cur.execute("SELECT DISTINCT user_id FROM accounts").fetchall():
+            rows = cur.execute(
+                "SELECT id FROM accounts WHERE user_id=? ORDER BY name", (uid,)
+            ).fetchall()
+            cur.executemany(
+                "UPDATE accounts SET sort_order=? WHERE id=?",
+                [(n, r[0]) for n, r in enumerate(rows, 1)],
+            )
+        conn.commit()
+
+    # A new account belongs at the end of its owner's grid. A trigger keeps that
+    # true without every INSERT site having to know the rule.
+    cur.execute("""
+        CREATE TRIGGER IF NOT EXISTS trg_accounts_sort_order
+        AFTER INSERT ON accounts
+        FOR EACH ROW WHEN NEW.sort_order = 0
+        BEGIN
+            UPDATE accounts SET sort_order = (
+                SELECT COALESCE(MAX(sort_order), 0) + 1
+                FROM accounts WHERE user_id = NEW.user_id
+            ) WHERE id = NEW.id;
         END;
     """)
 
