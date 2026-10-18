@@ -1785,25 +1785,144 @@ const Dashboard = {
     // The add tile sits in the grid rather than the header — it belongs with
     // the things it creates, and the header stays uncluttered as actions grow.
     const addTile = `
-      <button type="button" class="account-tile account-tile--add" onclick="Accounts.openNew()">
+      <div class="account-tile account-tile--add" role="button" tabindex="0"
+           data-acct-new="1">
         <span class="account-tile-add-icon"><i class="bi bi-plus-lg"></i></span>
         <span class="account-tile-add-text">New account</span>
-      </button>`;
+      </div>`;
 
+    // Tiles are divs, not buttons: they are drag handles as well as links, and
+    // the click that opens one is delegated so a drag can cancel it.
     $('accountTiles').innerHTML = accounts.map(a => `
-      <button type="button" class="account-tile${a.id === State.accountId ? ' active' : ''}"
-              onclick="Dashboard.openAccount(${a.id})">
+      <div class="account-tile acct-hue-${this.hue(a.id)}${a.id === State.accountId ? ' active' : ''}"
+           role="button" tabindex="0" data-acct-id="${a.id}">
+        <span class="account-tile-grip" title="Drag to reorder"><i class="bi bi-grip-vertical"></i></span>
         <span class="account-tile-name">${esc(a.name)}</span>
         <span class="account-tile-balance ${balClass(a.balance)}">${fmt(a.balance)}</span>
         <span class="account-tile-cta">View buckets <i class="bi bi-arrow-right"></i></span>
-      </button>`).join('') + (accounts.length ? addTile : '');
+      </div>`).join('') + (accounts.length ? addTile : '');
   },
+
+  // Colour follows the account, never its position — eight fixed hues keyed by
+  // id, so dragging the grid around never repaints a tile the user has learnt.
+  // The name is always on the tile, so the hue is decoration, never the label.
+  hue(id) { return id % 8; },
 
   // A tile is a drill-down into that account's buckets — the per-account view.
   openAccount(id) {
     State.accountId = id;
     $('accountSelect').value = id;
     App.nav('buckets');
+  },
+
+  // ---- Tile click + drag-to-reorder -------------------------------------
+  // Pointer events rather than HTML5 drag-and-drop: the same code then covers
+  // mouse and touch, where dragstart never fires.
+  _drag: null,
+  _draggedAt: 0,
+
+  initTiles() {
+    const grid = $('accountTiles');
+
+    grid.addEventListener('click', e => {
+      // A drag ends in a click on the tile that was moved; swallow that one
+      // rather than opening the account. Time-bounded, so a click that never
+      // comes cannot leave the next real one disarmed.
+      if (Date.now() - this._draggedAt < 300) { this._draggedAt = 0; return; }
+      if (e.target.closest('.account-tile-grip')) return;
+      const tile = e.target.closest('.account-tile');
+      if (!tile) return;
+      if (tile.dataset.acctNew) Accounts.openNew();
+      else this.openAccount(parseInt(tile.dataset.acctId));
+    });
+
+    grid.addEventListener('keydown', e => {
+      if (e.key !== 'Enter' && e.key !== ' ') return;
+      const tile = e.target.closest('.account-tile');
+      if (!tile) return;
+      e.preventDefault();
+      if (tile.dataset.acctNew) Accounts.openNew();
+      else this.openAccount(parseInt(tile.dataset.acctId));
+    });
+
+    grid.addEventListener('pointerdown', e => {
+      if (e.button !== 0 || !e.target.closest('.account-tile-grip')) return;
+      const tile = e.target.closest('.account-tile[data-acct-id]');
+      if (tile) this._dragStart(tile, e);
+    });
+  },
+
+  _dragStart(tile, e) {
+    e.preventDefault();
+    const grid = $('accountTiles');
+    this._drag = { tile, order: this._tileOrder(), moved: false };
+    tile.classList.add('dragging');
+    grid.classList.add('sorting');
+
+    // The tile is reordered in place rather than lifted out of the flow, so
+    // the grid shows its own result as the pointer crosses each neighbour.
+    const onMove = ev => this._dragMove(ev);
+    const onEnd = () => {
+      window.removeEventListener('pointermove', onMove);
+      window.removeEventListener('pointerup', onEnd);
+      window.removeEventListener('pointercancel', onEnd);
+      this._dragEnd();
+    };
+    window.addEventListener('pointermove', onMove);
+    window.addEventListener('pointerup', onEnd);
+    window.addEventListener('pointercancel', onEnd);
+  },
+
+  _dragMove(e) {
+    const d = this._drag;
+    if (!d) return;
+    // The whole stack under the cursor, so the tile being dragged — which is
+    // still sitting in the grid — does not mask the neighbour beneath it.
+    const over = document.elementsFromPoint(e.clientX, e.clientY)
+      .map(el => el.closest?.('.account-tile[data-acct-id]'))
+      .find(t => t && t !== d.tile);
+    if (!over) return;
+    const r = over.getBoundingClientRect();
+    const after = e.clientX - r.left > r.width / 2;
+    const ref = after ? over.nextSibling : over;
+    if (ref === d.tile) return;   // already there — not a move
+    over.parentNode.insertBefore(d.tile, ref);
+    d.moved = true;
+  },
+
+  async _dragEnd() {
+    const d = this._drag;
+    this._drag = null;
+    if (!d) return;
+    d.tile.classList.remove('dragging');
+    $('accountTiles').classList.remove('sorting');
+    if (d.moved) this._draggedAt = Date.now();
+
+    const ids = this._tileOrder();
+    if (ids.join() === d.order.join()) return;
+
+    // Keep State in the new order so any repaint — the sidebar selector
+    // included — agrees with the screen before the save even returns. If a
+    // refresh changed the account list mid-drag, the screen is stale: reload
+    // rather than save an order built from accounts that have since moved.
+    const byId = new Map(State.accounts.map(a => [a.id, a]));
+    if (ids.length !== byId.size || !ids.every(id => byId.has(id))) {
+      this.load();
+      return;
+    }
+    State.accounts = ids.map(id => byId.get(id));
+    Accounts.populateSelector();
+    try {
+      await api('POST', '/api/accounts/reorder', { ids });
+    } catch (e) {
+      showError(e.message);
+      this.load();
+    }
+  },
+
+  _tileOrder() {
+    return [...$('accountTiles').querySelectorAll('.account-tile[data-acct-id]')]
+      .map(el => parseInt(el.dataset.acctId));
   },
 };
 
@@ -1893,6 +2012,8 @@ const App = {
     Trash.init();
     ChangePassword.init();
     Intro.init();
+
+    Dashboard.initTiles();
 
     $('btnDashRefresh').addEventListener('click', () => Dashboard.load());
 
