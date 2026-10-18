@@ -1996,11 +1996,12 @@ const App = {
       a.addEventListener('click', () => { if (window.innerWidth <= 768) closeMobileSidebar(); });
     });
 
-    // Account selector change
+    // Account selector change. Clearing it leaves every per-account section
+    // with nothing to show, so the placeholder goes back to the dashboard.
     $('accountSelect').addEventListener('change', async () => {
       const val = $('accountSelect').value;
       State.accountId = val ? parseInt(val) : null;
-      this.nav(State.currentSection);
+      this.nav(val ? State.currentSection : 'dashboard');
     });
 
     // Modules init
