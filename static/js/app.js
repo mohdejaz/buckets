@@ -86,14 +86,26 @@ function buildPagination(containerId, currentPage, totalPages, onPage) {
 }
 
 // ---- Confirm dialog ----
-function confirm(msg, label = 'Delete', danger = true) {
+// With `opts.date`, the dialog also asks which day to book on and resolves to
+// that ISO date instead of `true` — still falsy only when dismissed, so
+// `if (!ok) return;` reads the same at every call site.
+function confirm(msg, label = 'Delete', danger = true, opts = {}) {
   return new Promise(resolve => {
     $('confirmMessage').textContent = msg;
     const btn = $('btnConfirmOk');
     btn.textContent = label;
     btn.className = `btn btn-sm ${danger ? 'btn-danger' : 'btn-warning'}`;
+    const dateWrap = $('confirmDateWrap');
+    const dateInput = $('confirmDate');
+    dateWrap.classList.toggle('d-none', !opts.date);
+    if (opts.date) dateInput.value = today();
     const modal = new bootstrap.Modal($('confirmModal'));
-    const onOk = () => { cleanup(); modal.hide(); resolve(true); };
+    const onOk = () => {
+      const value = opts.date ? (dateInput.value || today()) : true;
+      cleanup();
+      modal.hide();
+      resolve(value);
+    };
     const onDismiss = () => { cleanup(); resolve(false); };
     const cleanup = () => {
       btn.removeEventListener('click', onOk);
@@ -519,10 +531,10 @@ const Buckets = {
       showError(`"${b?.name}" has nothing to refill — its refill factor is ${b?.refill_factor ?? 0}.`);
       return;
     }
-    const ok = await confirm(`Transfer ${fmt(amount)} from Settlement to "${b?.name}"?`, 'Refill', false);
-    if (!ok) return;
+    const txDate = await confirm(`Transfer ${fmt(amount)} from Settlement to "${b?.name}"?`, 'Refill', false, { date: true });
+    if (!txDate) return;
     try {
-      const res = await api('POST', `/api/buckets/${id}/refill`);
+      const res = await api('POST', `/api/buckets/${id}/refill`, { tx_date: txDate });
       toast(`Refilled ${fmt(res.amount)}`);
       await this.load();
       App.refreshBalances();
@@ -636,10 +648,10 @@ const Buckets = {
 
   async refillAll() {
     if (!State.accountId) { showError('Please select an account first.'); return; }
-    const ok = await confirm('Transfer from Settlement into all buckets based on their budget and refill factor?', 'Refill All', false);
-    if (!ok) return;
+    const txDate = await confirm('Transfer from Settlement into all buckets based on their budget and refill factor?', 'Refill All', false, { date: true });
+    if (!txDate) return;
     try {
-      const res = await api('POST', '/api/buckets/refill-all', { acct_id: State.accountId });
+      const res = await api('POST', '/api/buckets/refill-all', { acct_id: State.accountId, tx_date: txDate });
       toast(`Refilled ${res.count} bucket(s)`);
       await this.load();
       App.refreshBalances();

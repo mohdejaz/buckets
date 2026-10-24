@@ -233,6 +233,15 @@ def _refill_factor(value, default=1.0):
         return default
 
 
+def _tx_date(value):
+    """The date a transaction is booked on. The client sends ISO from a date
+    picker; anything missing or malformed falls back to today."""
+    try:
+        return date.fromisoformat((value or '').strip()).isoformat()
+    except (TypeError, ValueError):
+        return date.today().isoformat()
+
+
 # Rows are addressed by bare id throughout this API, and @login_required only
 # proves that *someone* is logged in. These helpers prove the row belongs to the
 # caller: each returns None when it does not, which callers turn into a 404.
@@ -668,6 +677,7 @@ def get_bucket_transactions(bkt_id):
 @app.route('/api/buckets/<int:bkt_id>/refill', methods=['POST'])
 @login_required
 def refill_bucket(bkt_id):
+    tx_date = _tx_date((request.get_json(silent=True) or {}).get('tx_date'))
     try:
         with db_conn() as conn:
             row = _own_bucket(
@@ -689,15 +699,14 @@ def refill_bucket(bkt_id):
                 ).fetchone()[0])
                 if s_balance - amount < 0:
                     return jsonify({'error': f'Insufficient Settlement balance (${s_balance:.2f}) to refill ${amount:.2f}'}), 400
-            today = date.today().isoformat()
             conn.execute(
                 "INSERT INTO transactions (tx_date, bucket_id, amount, note, posted) VALUES (?,?,?,?,0)",
-                (today, bkt_id, amount, 'Refill'),
+                (tx_date, bkt_id, amount, 'Refill'),
             )
             if settlement:
                 conn.execute(
                     "INSERT INTO transactions (tx_date, bucket_id, amount, note, posted) VALUES (?,?,?,?,0)",
-                    (today, settlement['id'], -amount, 'Refill'),
+                    (tx_date, settlement['id'], -amount, 'Refill'),
                 )
             conn.commit()
         return jsonify({'ok': True, 'amount': amount})
@@ -711,6 +720,7 @@ def refill_all_buckets():
     acct_id = request.json.get('acct_id')
     if not acct_id:
         return jsonify({'error': 'acct_id required'}), 400
+    tx_date = _tx_date(request.json.get('tx_date'))
     try:
         with db_conn() as conn:
             if not _own_account(conn, acct_id):
@@ -732,19 +742,18 @@ def refill_all_buckets():
                 ).fetchone()[0])
                 if s_balance - total < 0:
                     return jsonify({'error': f'Insufficient Settlement balance (${s_balance:.2f}) to refill ${total:.2f}'}), 400
-            today = date.today().isoformat()
             count = 0
             for b in buckets:
                 amount = _fmt(b['budget'] * b['refill_factor'])
                 conn.execute(
                     "INSERT INTO transactions (tx_date, bucket_id, amount, note, posted) VALUES (?,?,?,?,0)",
-                    (today, b['id'], amount, 'Refill'),
+                    (tx_date, b['id'], amount, 'Refill'),
                 )
                 count += 1
             if settlement and total > 0:
                 conn.execute(
                     "INSERT INTO transactions (tx_date, bucket_id, amount, note, posted) VALUES (?,?,?,?,0)",
-                    (today, settlement['id'], -total, 'Refill'),
+                    (tx_date, settlement['id'], -total, 'Refill'),
                 )
             conn.commit()
         return jsonify({'ok': True, 'count': count})
