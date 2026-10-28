@@ -626,23 +626,35 @@
             <div class="invalid-feedback">Please enter a bucket name.</div>
           </div>
           <div class="row g-3">
-            <div class="col-6">
+            <div class="col-6" id="bucketBudgetCol">
               <label class="form-label fw-semibold">Budget</label>
               <div class="input-group">
                 <span class="input-group-text">$</span>
                 <input type="number" class="form-control" id="bucketBudget" step="0.01" min="0" value="0"/>
               </div>
+              <div class="form-text d-none" id="bucketBudgetHelp"></div>
             </div>
-            <div class="col-6">
+            <!-- Hidden for a group: a group has no budget of its own to apply a
+                 factor to, so the factor belongs to each sub-bucket. -->
+            <div class="col-6" id="bucketFactorCol">
               <label class="form-label fw-semibold">Refill Factor</label>
               <input type="number" class="form-control" id="bucketRefillFactor" step="0.01" min="0" max="10" value="1.0"/>
               <div class="form-text">e.g. 0.5 = refill half the budget; 0 = keep the budget, never refill</div>
             </div>
           </div>
+          <div class="mt-3">
+            <label class="form-label fw-semibold">Parent bucket</label>
+            <select class="form-select" id="bucketParent">
+              <option value="">— None (top level) —</option>
+            </select>
+            <div class="form-text" id="bucketParentHelp">
+              Put this bucket inside a group. The group's budget and balance are its sub-buckets' totals.
+            </div>
+          </div>
           <div class="form-check form-switch mt-3">
             <input class="form-check-input" type="checkbox" id="bucketAutoRefill" checked/>
             <label class="form-check-label" for="bucketAutoRefill">Include in <strong>Refill All</strong></label>
-            <div class="form-text">Off = this bucket is skipped by Refill All and can only be refilled by hand.</div>
+            <div class="form-text" id="bucketAutoRefillHelp">Off = this bucket is skipped by Refill All and can only be refilled by hand. On a group, that covers every sub-bucket under it.</div>
           </div>
         </form>
       </div>

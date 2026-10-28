@@ -19,6 +19,7 @@ Access is invite-only: there's no signup page, and you create each account yours
 
 - **Dashboard** — every account's balance as a tile grid with the combined total, so signing in lands on the numbers. A tile opens that account's buckets.
 - **Accounts & buckets** — organize money into accounts, split each into budget envelopes with per-bucket budgets and refill amounts.
+- **Sub-buckets** — group related buckets under a parent (Auto → Gas, Insurance, Repairs). The group is a roll-up: the sub-buckets hold the money and the parent row shows their combined budget, balance and refill. Refilling a group refills every sub-bucket under it.
 - **Transactions** — record income/spending against a bucket, post/unpost, soft-delete with restore, or purge permanently.
 - **Refills** — refill a single bucket or all buckets at once from the account's Settlement pool; reset a bucket's balance. A bucket can be excluded from Refill All, keeping its budget and refill factor but only ever topping up by hand.
 - **Transfers** — move money between buckets or between accounts.
