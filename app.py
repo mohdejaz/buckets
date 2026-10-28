@@ -233,6 +233,17 @@ def _refill_factor(value, default=1.0):
         return default
 
 
+def _auto_refill(value, default=True):
+    """Whether "Refill All" includes this bucket. A missing value keeps the
+    default — an older client that doesn't send the field leaves the bucket as
+    it was, rather than silently opting it out."""
+    if value is None or value == '':
+        return default
+    if isinstance(value, str):
+        return value.strip().lower() not in ('0', 'false', 'no', 'off', '')
+    return bool(value)
+
+
 def _tx_date(value):
     """The date a transaction is booked on. The client sends ISO from a date
     picker; anything missing or malformed falls back to today."""
@@ -472,7 +483,8 @@ def get_buckets():
                 return jsonify([])
             archived_filter = "" if include_archived else " AND archived=0"
             rows = conn.execute(
-                """SELECT id, name, budget, acct_id, refill_factor, is_settlement, archived
+                """SELECT id, name, budget, acct_id, refill_factor, auto_refill,
+                          is_settlement, archived
                    FROM buckets WHERE acct_id=?""" + archived_filter + " ORDER BY name",
                 (acct_id,),
             ).fetchall()
@@ -485,6 +497,7 @@ def get_buckets():
                     'budget': _fmt(r['budget']),
                     'acct_id': r['acct_id'],
                     'refill_factor': _fmt(r['refill_factor']),
+                    'auto_refill': bool(r['auto_refill']),
                     'is_settlement': bool(r['is_settlement']),
                     'archived': bool(r['archived']),
                     'balance': balance,
@@ -504,6 +517,7 @@ def create_bucket():
     budget        = _fmt(data.get('budget', 0))
     acct_id       = data.get('acct_id')
     refill_factor = _refill_factor(data.get('refill_factor'))
+    auto_refill   = _auto_refill(data.get('auto_refill'))
     if not name or not acct_id:
         return jsonify({'error': 'Name and account are required'}), 400
     try:
@@ -511,14 +525,16 @@ def create_bucket():
             if not _own_account(conn, acct_id):
                 return jsonify({'error': 'Account not found'}), 404
             cur = conn.execute(
-                "INSERT INTO buckets (name, budget, acct_id, refill_factor) VALUES (?,?,?,?)",
-                (name, budget, acct_id, refill_factor),
+                "INSERT INTO buckets (name, budget, acct_id, refill_factor, auto_refill)"
+                " VALUES (?,?,?,?,?)",
+                (name, budget, acct_id, refill_factor, int(auto_refill)),
             )
             conn.commit()
             bkt_id = cur.lastrowid
         return jsonify({
             'id': bkt_id, 'name': name, 'budget': budget,
             'acct_id': acct_id, 'refill_factor': refill_factor,
+            'auto_refill': auto_refill,
             'balance': 0.0, 'refill_mtd': 0.0, 'prev_balance': 0.0,
         }), 201
     except Exception as e:
@@ -536,11 +552,15 @@ def update_bucket(bkt_id):
         return jsonify({'error': 'Name is required'}), 400
     try:
         with db_conn() as conn:
-            if not _own_bucket(conn, bkt_id):
+            current = _own_bucket(conn, bkt_id, "b.auto_refill")
+            if not current:
                 return jsonify({'error': 'Bucket not found'}), 404
+            auto_refill = _auto_refill(
+                data.get('auto_refill'), default=bool(current['auto_refill']))
             conn.execute(
-                "UPDATE buckets SET name=?, budget=?, refill_factor=? WHERE id=?",
-                (name, budget, refill_factor, bkt_id),
+                "UPDATE buckets SET name=?, budget=?, refill_factor=?, auto_refill=?"
+                " WHERE id=?",
+                (name, budget, refill_factor, int(auto_refill), bkt_id),
             )
             conn.commit()
             row = conn.execute(
@@ -549,7 +569,8 @@ def update_bucket(bkt_id):
             balance, refill_mtd, prev_balance = _bucket_stats(conn, bkt_id)
         return jsonify({
             'id': bkt_id, 'name': name, 'budget': budget,
-            'refill_factor': refill_factor, 'acct_id': row['acct_id'],
+            'refill_factor': refill_factor, 'auto_refill': auto_refill,
+            'acct_id': row['acct_id'],
             'balance': balance, 'refill_mtd': refill_mtd, 'prev_balance': prev_balance,
         })
     except Exception as e:
@@ -629,7 +650,8 @@ def get_bucket_transactions(bkt_id):
     try:
         with db_conn() as conn:
             bucket = conn.execute(
-                """SELECT b.id, b.name, b.budget, b.refill_factor, b.is_settlement
+                """SELECT b.id, b.name, b.budget, b.refill_factor, b.auto_refill,
+                          b.is_settlement
                    FROM buckets b
                    JOIN accounts a ON a.id = b.acct_id
                    WHERE b.id=? AND a.user_id=?""",
@@ -665,6 +687,7 @@ def get_bucket_transactions(bkt_id):
                 'name':          bucket['name'],
                 'budget':        _fmt(bucket['budget']),
                 'refill_factor': _fmt(bucket['refill_factor']),
+                'auto_refill':   bool(bucket['auto_refill']),
                 'balance':       running,
                 'is_settlement': bool(bucket['is_settlement']),
             },
@@ -731,7 +754,7 @@ def refill_all_buckets():
             buckets = conn.execute(
                 """SELECT id, budget, refill_factor FROM buckets
                    WHERE acct_id=? AND budget > 0 AND refill_factor > 0
-                     AND is_settlement=0 AND archived=0""",
+                     AND auto_refill=1 AND is_settlement=0 AND archived=0""",
                 (acct_id,)
             ).fetchall()
             total = _fmt(sum(_fmt(b['budget'] * b['refill_factor']) for b in buckets))
