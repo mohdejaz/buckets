@@ -265,6 +265,13 @@ def _own_account(conn, acct_id):
     ).fetchone()
 
 
+# A bucket's display name, qualified by its group when it has one, so a ledger
+# row reads "Auto \u203a Gas" rather than a bare "Gas" that could belong to any
+# of several groups. Both halves are used together.
+_QUALIFIED_NAME = "COALESCE(p.name || ' \u203a ', '') || b.name"
+_QUALIFY_JOIN   = "LEFT JOIN buckets p ON p.id = b.parent_id"
+
+
 def _own_bucket(conn, bkt_id, columns="b.id"):
     return conn.execute(
         f"""SELECT {columns} FROM buckets b
@@ -282,6 +289,33 @@ def _own_tx(conn, tx_id, columns="t.id"):
             WHERE t.id=? AND a.user_id=?""",
         (tx_id, current_user_id()),
     ).fetchone()
+
+
+# Money never lands on a group row — it belongs to one of the sub-buckets under
+# it. Every write site that takes a bucket_id says so with this one message.
+_GROUP_ERR = '"{name}" is a group — pick one of its sub-buckets'
+
+
+# A bucket with children is a group: it holds no transactions, and its budget,
+# balance and refill numbers are its children's. These two helpers are the only
+# places that definition lives.
+def _is_parent(conn, bkt_id):
+    return conn.execute(
+        "SELECT 1 FROM buckets WHERE parent_id=? LIMIT 1", (bkt_id,)
+    ).fetchone() is not None
+
+
+def _child_ids(conn, bkt_id):
+    return [r[0] for r in conn.execute(
+        "SELECT id FROM buckets WHERE parent_id=? ORDER BY name", (bkt_id,)
+    ).fetchall()]
+
+
+def _stat_ids(conn, bkt_id):
+    """The buckets whose transactions make up this row's numbers — itself for a
+    leaf, its children for a group. A group with no children yet sums nothing."""
+    kids = _child_ids(conn, bkt_id)
+    return kids if kids else [bkt_id]
 
 
 def _own_upcoming(conn, item_id, columns="u.id"):
@@ -305,26 +339,35 @@ def _account_balance(conn, acct_id):
     return _fmt(row['bal'])
 
 
-def _bucket_stats(conn, bucket_id):
+def _bucket_stats(conn, bucket_id, ids=None):
+    """Balance, refill MTD and opening balance for a bucket.
+
+    `ids` lets a group row sum its children instead of itself — the queries are
+    the same, only the set of bucket_ids they cover differs."""
+    ids = ids if ids is not None else [bucket_id]
+    if not ids:
+        return 0.0, 0.0, 0.0
+    placeholders = ",".join("?" * len(ids))
     first_of_month = date.today().replace(day=1).isoformat()
 
     balance = conn.execute(
-        "SELECT COALESCE(SUM(amount),0) FROM transactions WHERE bucket_id=? AND deleted=0",
-        (bucket_id,),
+        f"SELECT COALESCE(SUM(amount),0) FROM transactions"
+        f" WHERE bucket_id IN ({placeholders}) AND deleted=0",
+        ids,
     ).fetchone()[0]
 
     refill_mtd = conn.execute(
-        """SELECT COALESCE(SUM(amount),0)
-           FROM transactions
-           WHERE bucket_id=? AND amount>=0 AND tx_date>=? AND deleted=0""",
-        (bucket_id, first_of_month),
+        f"""SELECT COALESCE(SUM(amount),0)
+            FROM transactions
+            WHERE bucket_id IN ({placeholders}) AND amount>=0 AND tx_date>=? AND deleted=0""",
+        ids + [first_of_month],
     ).fetchone()[0]
 
     prev_balance = conn.execute(
-        """SELECT COALESCE(SUM(amount),0)
-           FROM transactions
-           WHERE bucket_id=? AND tx_date<? AND deleted=0""",
-        (bucket_id, first_of_month),
+        f"""SELECT COALESCE(SUM(amount),0)
+            FROM transactions
+            WHERE bucket_id IN ({placeholders}) AND tx_date<? AND deleted=0""",
+        ids + [first_of_month],
     ).fetchone()[0]
 
     return _fmt(balance), _fmt(refill_mtd), _fmt(prev_balance)
@@ -484,29 +527,147 @@ def get_buckets():
             archived_filter = "" if include_archived else " AND archived=0"
             rows = conn.execute(
                 """SELECT id, name, budget, acct_id, refill_factor, auto_refill,
-                          is_settlement, archived
+                          is_settlement, archived, parent_id
                    FROM buckets WHERE acct_id=?""" + archived_filter + " ORDER BY name",
                 (acct_id,),
             ).fetchall()
-            buckets = []
+
+            # Children by parent, so a group's numbers are its children's sums
+            # and the flat list can still come back in tree order.
+            kids = {}
             for r in rows:
-                balance, refill_mtd, prev_balance = _bucket_stats(conn, r['id'])
-                buckets.append({
+                if r['parent_id']:
+                    kids.setdefault(r['parent_id'], []).append(r)
+
+            by_id = {r['id']: r for r in rows}
+
+            def entry(r):
+                children = kids.get(r['id'], [])
+                is_parent = bool(children)
+                ids = [c['id'] for c in children] if is_parent else [r['id']]
+                balance, refill_mtd, prev_balance = _bucket_stats(conn, r['id'], ids)
+                return {
                     'id': r['id'],
                     'name': r['name'],
-                    'budget': _fmt(r['budget']),
+                    # A group's budget and factor are its children's, not its
+                    # own stored values — those are left over from before it
+                    # became a group and would double-count if shown.
+                    'budget': _fmt(sum(c['budget'] for c in children)) if is_parent
+                              else _fmt(r['budget']),
                     'acct_id': r['acct_id'],
-                    'refill_factor': _fmt(r['refill_factor']),
-                    'auto_refill': bool(r['auto_refill']),
+                    # A group has no factor of its own — the children's differ,
+                    # and averaging them would be a number that means nothing.
+                    'refill_factor': None if is_parent else _fmt(r['refill_factor']),
+                    # What a refill of this row would move, so the client does
+                    # not have to know that a group sums its children.
+                    'refill_amount': _fmt(sum(c['budget'] * c['refill_factor'] for c in children))
+                                     if is_parent else _fmt(r['budget'] * r['refill_factor']),
+                    # A sub-bucket reports its group's setting: that is what
+                    # Refill All will actually do, and the only honest thing to
+                    # draw next to it.
+                    'auto_refill': bool(
+                        by_id[r['parent_id']]['auto_refill']
+                        if r['parent_id'] and r['parent_id'] in by_id
+                        else r['auto_refill']),
                     'is_settlement': bool(r['is_settlement']),
                     'archived': bool(r['archived']),
+                    'parent_id': r['parent_id'],
+                    'is_parent': is_parent,
+                    'child_count': len(children),
                     'balance': balance,
                     'refill_mtd': refill_mtd,
                     'prev_balance': prev_balance,
-                })
+                }
+
+            # Flat, but in display order: each group immediately followed by its
+            # own children. Every existing consumer still sees a plain array.
+            buckets = []
+            for r in rows:
+                if r['parent_id']:
+                    continue
+                buckets.append(entry(r))
+                for c in kids.get(r['id'], []):
+                    buckets.append(entry(c))
+            # A child whose parent is filtered out (archived parent, archived=0
+            # view) would otherwise vanish from the list entirely.
+            listed = {b['id'] for b in buckets}
+            for r in rows:
+                if r['id'] not in listed:
+                    buckets.append(entry(r))
         return jsonify(buckets)
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+
+
+def _validate_parent(conn, parent_id, acct_id, child_id=None):
+    """Check a proposed parent. Returns an error string, or None if it's legal.
+
+    The rules exist so a group stays a one-level roll-up: no grandchildren, no
+    grouping of Settlement, and no bucket parented into another account."""
+    parent = conn.execute(
+        "SELECT id, acct_id, is_settlement, parent_id FROM buckets WHERE id=?",
+        (parent_id,),
+    ).fetchone()
+    if not parent or not _own_account(conn, parent['acct_id']):
+        return 'Parent bucket not found'
+    if child_id is not None and parent['id'] == child_id:
+        return 'A bucket cannot be its own parent'
+    if parent['acct_id'] != acct_id:
+        return 'A sub-bucket must be in the same account as its parent'
+    if parent['is_settlement']:
+        return 'Settlement cannot hold sub-buckets'
+    if parent['parent_id']:
+        return 'Sub-buckets only go one level deep'
+    if child_id is not None and _is_parent(conn, child_id):
+        return 'A bucket with sub-buckets cannot itself become one'
+    return None
+
+
+def _convert_to_group(conn, parent_id):
+    """Make room under a bucket that is about to get its first sub-bucket.
+
+    A group holds no money, so whatever the bucket already holds has to go
+    somewhere — moving it into a "General" sub-bucket keeps every balance
+    identical while freeing the parent row to become a total. Returns the name
+    and transaction count moved, or None when there was nothing to move."""
+    row = conn.execute(
+        "SELECT name, budget, refill_factor, auto_refill FROM buckets WHERE id=?",
+        (parent_id,),
+    ).fetchone()
+    tx_count = conn.execute(
+        "SELECT COUNT(*) FROM transactions WHERE bucket_id=?", (parent_id,)
+    ).fetchone()[0]
+    if not tx_count and not row['budget']:
+        # Nothing to preserve — the bucket can become a group as it is.
+        return None
+
+    # "General" may be taken if the user already made one; number it rather
+    # than merge into a bucket they created for another purpose.
+    base, name, n = 'General', 'General', 1
+    while conn.execute(
+        "SELECT 1 FROM buckets WHERE parent_id=? AND name=?", (parent_id, name)
+    ).fetchone():
+        n += 1
+        name = f'{base} {n}'
+
+    cur = conn.execute(
+        "INSERT INTO buckets (name, budget, acct_id, refill_factor, auto_refill, parent_id)"
+        " SELECT ?, budget, acct_id, refill_factor, auto_refill, id FROM buckets WHERE id=?",
+        (name, parent_id),
+    )
+    general_id = cur.lastrowid
+    # Soft-deleted rows move too: they still belong to this money, and leaving
+    # them behind would make Trash restore into a group.
+    conn.execute(
+        "UPDATE transactions SET bucket_id=? WHERE bucket_id=?", (general_id, parent_id)
+    )
+    conn.execute(
+        "UPDATE upcoming_expenses SET bucket_id=? WHERE bucket_id=?", (general_id, parent_id)
+    )
+    # The budget now lives on the child; leaving it on the parent as well would
+    # show up twice in the group's derived total.
+    conn.execute("UPDATE buckets SET budget=0 WHERE id=?", (parent_id,))
+    return {'name': name, 'moved_tx': tx_count}
 
 
 @app.route('/api/buckets', methods=['POST'])
@@ -518,23 +679,33 @@ def create_bucket():
     acct_id       = data.get('acct_id')
     refill_factor = _refill_factor(data.get('refill_factor'))
     auto_refill   = _auto_refill(data.get('auto_refill'))
+    parent_id     = data.get('parent_id') or None
     if not name or not acct_id:
         return jsonify({'error': 'Name and account are required'}), 400
     try:
         with db_conn() as conn:
             if not _own_account(conn, acct_id):
                 return jsonify({'error': 'Account not found'}), 404
+            converted = None
+            if parent_id:
+                err = _validate_parent(conn, parent_id, acct_id)
+                if err:
+                    return jsonify({'error': err}), 400
+                converted = _convert_to_group(conn, parent_id)
             cur = conn.execute(
-                "INSERT INTO buckets (name, budget, acct_id, refill_factor, auto_refill)"
-                " VALUES (?,?,?,?,?)",
-                (name, budget, acct_id, refill_factor, int(auto_refill)),
+                "INSERT INTO buckets (name, budget, acct_id, refill_factor, auto_refill, parent_id)"
+                " VALUES (?,?,?,?,?,?)",
+                (name, budget, acct_id, refill_factor, int(auto_refill), parent_id),
             )
             conn.commit()
             bkt_id = cur.lastrowid
         return jsonify({
             'id': bkt_id, 'name': name, 'budget': budget,
             'acct_id': acct_id, 'refill_factor': refill_factor,
-            'auto_refill': auto_refill,
+            'auto_refill': auto_refill, 'parent_id': parent_id,
+            'is_parent': False, 'child_count': 0,
+            'refill_amount': _fmt(budget * refill_factor),
+            'converted': converted,
             'balance': 0.0, 'refill_mtd': 0.0, 'prev_balance': 0.0,
         }), 201
     except Exception as e:
@@ -546,31 +717,60 @@ def create_bucket():
 def update_bucket(bkt_id):
     data          = request.json
     name          = (data.get('name') or '').strip()
-    budget        = _fmt(data.get('budget', 0))
-    refill_factor = _refill_factor(data.get('refill_factor'))
     if not name:
         return jsonify({'error': 'Name is required'}), 400
     try:
         with db_conn() as conn:
-            current = _own_bucket(conn, bkt_id, "b.auto_refill")
+            current = _own_bucket(
+                conn, bkt_id,
+                "b.auto_refill, b.acct_id, b.parent_id, b.is_settlement,"
+                " b.refill_factor, b.budget")
             if not current:
                 return jsonify({'error': 'Bucket not found'}), 404
             auto_refill = _auto_refill(
                 data.get('auto_refill'), default=bool(current['auto_refill']))
+            # A group reports no factor of its own, so a client echoing the
+            # bucket back would otherwise reset it to the default.
+            refill_factor = _refill_factor(
+                data.get('refill_factor'), default=current['refill_factor'])
+            # Same contract as the other two: a field the client did not send
+            # is a field it is not changing. A group never sends these at all.
+            budget = (_fmt(data['budget']) if data.get('budget') is not None
+                      else _fmt(current['budget']))
+
+            # Omitted means "leave it where it is"; an explicit null promotes a
+            # sub-bucket back to top level.
+            converted = None
+            parent_id = current['parent_id']
+            if 'parent_id' in data:
+                parent_id = data.get('parent_id') or None
+                if parent_id and current['is_settlement']:
+                    return jsonify({'error': 'Settlement cannot be a sub-bucket'}), 400
+                if parent_id and parent_id != current['parent_id']:
+                    err = _validate_parent(
+                        conn, parent_id, current['acct_id'], child_id=bkt_id)
+                    if err:
+                        return jsonify({'error': err}), 400
+                    converted = _convert_to_group(conn, parent_id)
+
+            is_group = _is_parent(conn, bkt_id)
             conn.execute(
-                "UPDATE buckets SET name=?, budget=?, refill_factor=?, auto_refill=?"
-                " WHERE id=?",
-                (name, budget, refill_factor, int(auto_refill), bkt_id),
+                "UPDATE buckets SET name=?, refill_factor=?, auto_refill=?, parent_id=?"
+                + ("" if is_group else ", budget=?") + " WHERE id=?",
+                (name, refill_factor, int(auto_refill), parent_id, bkt_id) if is_group
+                else (name, refill_factor, int(auto_refill), parent_id, budget, bkt_id),
             )
             conn.commit()
             row = conn.execute(
                 "SELECT acct_id FROM buckets WHERE id=?", (bkt_id,)
             ).fetchone()
-            balance, refill_mtd, prev_balance = _bucket_stats(conn, bkt_id)
+            balance, refill_mtd, prev_balance = _bucket_stats(
+                conn, bkt_id, _stat_ids(conn, bkt_id))
         return jsonify({
             'id': bkt_id, 'name': name, 'budget': budget,
             'refill_factor': refill_factor, 'auto_refill': auto_refill,
-            'acct_id': row['acct_id'],
+            'acct_id': row['acct_id'], 'parent_id': parent_id,
+            'is_parent': is_group, 'converted': converted,
             'balance': balance, 'refill_mtd': refill_mtd, 'prev_balance': prev_balance,
         })
     except Exception as e:
@@ -589,6 +789,9 @@ def delete_bucket(bkt_id):
             ).fetchone()[0]
             if cnt > 0:
                 return jsonify({'error': 'Cannot delete bucket with transactions'}), 400
+            if _is_parent(conn, bkt_id):
+                return jsonify({
+                    'error': 'Delete or move its sub-buckets first'}), 400
             conn.execute("DELETE FROM buckets WHERE id=?", (bkt_id,))
             conn.commit()
         return jsonify({'ok': True})
@@ -611,13 +814,19 @@ def archive_bucket(bkt_id):
                 return jsonify({'error': 'Bucket not found'}), 404
             if row['is_settlement']:
                 return jsonify({'error': 'The Settlement bucket cannot be archived'}), 400
+            # A group's balance is its children's, so archiving one has to
+            # clear the whole subtree — and takes the children with it, or they
+            # would be left visible with no parent row above them.
+            ids = _stat_ids(conn, bkt_id)
             balance = _fmt(conn.execute(
-                "SELECT COALESCE(SUM(amount),0) FROM transactions WHERE bucket_id=? AND deleted=0",
-                (bkt_id,),
+                "SELECT COALESCE(SUM(amount),0) FROM transactions"
+                f" WHERE bucket_id IN ({','.join('?' * len(ids))}) AND deleted=0",
+                ids,
             ).fetchone()[0])
             if balance != 0:
                 return jsonify({'error': f'Empty the bucket before archiving (balance ${balance:.2f})'}), 400
-            conn.execute("UPDATE buckets SET archived=1 WHERE id=?", (bkt_id,))
+            conn.execute(
+                "UPDATE buckets SET archived=1 WHERE id=? OR parent_id=?", (bkt_id, bkt_id))
             conn.commit()
         return jsonify({'ok': True})
     except Exception as e:
@@ -637,7 +846,8 @@ def unarchive_bucket(bkt_id):
             ).fetchone()
             if not row:
                 return jsonify({'error': 'Bucket not found'}), 404
-            conn.execute("UPDATE buckets SET archived=0 WHERE id=?", (bkt_id,))
+            conn.execute(
+                "UPDATE buckets SET archived=0 WHERE id=? OR parent_id=?", (bkt_id, bkt_id))
             conn.commit()
         return jsonify({'ok': True})
     except Exception as e:
@@ -650,11 +860,13 @@ def get_bucket_transactions(bkt_id):
     try:
         with db_conn() as conn:
             bucket = conn.execute(
-                """SELECT b.id, b.name, b.budget, b.refill_factor, b.auto_refill,
-                          b.is_settlement
-                   FROM buckets b
-                   JOIN accounts a ON a.id = b.acct_id
-                   WHERE b.id=? AND a.user_id=?""",
+                f"""SELECT b.id, {_QUALIFIED_NAME} AS name, b.budget,
+                           b.refill_factor, b.auto_refill, b.is_settlement,
+                           b.parent_id
+                    FROM buckets b
+                    JOIN accounts a ON a.id = b.acct_id
+                    {_QUALIFY_JOIN}
+                    WHERE b.id=? AND a.user_id=?""",
                 (bkt_id, current_user_id()),
             ).fetchone()
             if not bucket:
@@ -712,7 +924,20 @@ def refill_bucket(bkt_id):
             settlement = conn.execute(
                 "SELECT id FROM buckets WHERE acct_id=? AND is_settlement=1", (row['acct_id'],)
             ).fetchone()
-            amount = _fmt(row['budget'] * row['refill_factor'])
+
+            # A group holds nothing itself, so refilling it means refilling each
+            # of its children. Done by hand like this, a child's auto_refill=0
+            # is not a veto — same as refilling that child on its own.
+            targets = conn.execute(
+                "SELECT id, budget, refill_factor FROM buckets"
+                " WHERE parent_id=? AND archived=0", (bkt_id,)
+            ).fetchall()
+            if not targets:
+                targets = [{'id': bkt_id, 'budget': row['budget'],
+                            'refill_factor': row['refill_factor']}]
+            moves = [(t['id'], _fmt(t['budget'] * t['refill_factor'])) for t in targets]
+            moves = [(i, a) for i, a in moves if a > 0]
+            amount = _fmt(sum(a for _, a in moves))
             if amount <= 0:
                 return jsonify({'error': 'Nothing to refill — budget x refill factor is $0.00'}), 400
             if settlement:
@@ -722,17 +947,20 @@ def refill_bucket(bkt_id):
                 ).fetchone()[0])
                 if s_balance - amount < 0:
                     return jsonify({'error': f'Insufficient Settlement balance (${s_balance:.2f}) to refill ${amount:.2f}'}), 400
-            conn.execute(
-                "INSERT INTO transactions (tx_date, bucket_id, amount, note, posted) VALUES (?,?,?,?,0)",
-                (tx_date, bkt_id, amount, 'Refill'),
-            )
+            for target_id, target_amount in moves:
+                conn.execute(
+                    "INSERT INTO transactions (tx_date, bucket_id, amount, note, posted) VALUES (?,?,?,?,0)",
+                    (tx_date, target_id, target_amount, 'Refill'),
+                )
             if settlement:
+                # One debit for the whole refill, so Settlement's ledger shows
+                # the group as the single movement the user asked for.
                 conn.execute(
                     "INSERT INTO transactions (tx_date, bucket_id, amount, note, posted) VALUES (?,?,?,?,0)",
                     (tx_date, settlement['id'], -amount, 'Refill'),
                 )
             conn.commit()
-        return jsonify({'ok': True, 'amount': amount})
+        return jsonify({'ok': True, 'amount': amount, 'count': len(moves)})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -752,9 +980,16 @@ def refill_all_buckets():
                 "SELECT id FROM buckets WHERE acct_id=? AND is_settlement=1", (acct_id,)
             ).fetchone()
             buckets = conn.execute(
-                """SELECT id, budget, refill_factor FROM buckets
+                """SELECT id, budget, refill_factor FROM buckets b
                    WHERE acct_id=? AND budget > 0 AND refill_factor > 0
-                     AND auto_refill=1 AND is_settlement=0 AND archived=0""",
+                     AND is_settlement=0 AND archived=0
+                     AND NOT EXISTS (SELECT 1 FROM buckets c WHERE c.parent_id = b.id)
+                     -- Only a top-level bucket speaks for itself. A sub-bucket
+                     -- takes its group's answer, so the group is the one switch
+                     -- for everything under it; the sub-bucket's own stored
+                     -- value waits for the day it is promoted back out.
+                     AND COALESCE((SELECT g.auto_refill FROM buckets g
+                                   WHERE g.id = b.parent_id), b.auto_refill) = 1""",
                 (acct_id,)
             ).fetchall()
             total = _fmt(sum(_fmt(b['budget'] * b['refill_factor']) for b in buckets))
@@ -801,7 +1036,9 @@ def reset_buckets():
                 return jsonify({'error': 'No Settlement bucket for this account'}), 400
             settlement_id = settlement['id']
             buckets = conn.execute(
-                "SELECT id FROM buckets WHERE acct_id=? AND is_settlement=0 AND archived=0", (acct_id,)
+                """SELECT id FROM buckets b WHERE acct_id=? AND is_settlement=0 AND archived=0
+                     AND NOT EXISTS (SELECT 1 FROM buckets c WHERE c.parent_id = b.id)""",
+                (acct_id,)
             ).fetchall()
             today = date.today().isoformat()
             swept = 0.0
@@ -846,6 +1083,11 @@ def transfer():
         with db_conn() as conn:
             if not _own_bucket(conn, from_id) or not _own_bucket(conn, to_id):
                 return jsonify({'error': 'Bucket not found'}), 404
+            for side in (from_id, to_id):
+                if _is_parent(conn, side):
+                    name = conn.execute(
+                        "SELECT name FROM buckets WHERE id=?", (side,)).fetchone()['name']
+                    return jsonify({'error': _GROUP_ERR.format(name=name)}), 400
             archived = conn.execute(
                 "SELECT COUNT(*) FROM buckets WHERE id IN (?,?) AND archived=1", (from_id, to_id)
             ).fetchone()[0]
@@ -1059,6 +1301,7 @@ def get_transactions():
             base_sql = """
                 FROM transactions t
                 JOIN buckets b ON b.id = t.bucket_id
+                """ + _QUALIFY_JOIN + """
                 WHERE b.acct_id = ? AND t.deleted=0
             """
             params = [acct_id]
@@ -1071,7 +1314,7 @@ def get_transactions():
             ).fetchone()[0]
             offset = (page - 1) * per_page
             rows   = conn.execute(
-                "SELECT t.id, t.tx_date, b.name AS bucket, t.bucket_id,"
+                f"SELECT t.id, t.tx_date, {_QUALIFIED_NAME} AS bucket, t.bucket_id,"
                 "       t.amount, t.note, t.posted, t.linked_tx_id "
                 + base_sql
                 + " ORDER BY t.tx_date DESC, t.sort_order DESC, t.id DESC LIMIT ? OFFSET ?",
@@ -1133,6 +1376,8 @@ def create_transaction():
             bucket = _own_bucket(conn, bucket_id, "b.name, b.archived")
             if not bucket:
                 return jsonify({'error': 'Bucket not found'}), 404
+            if _is_parent(conn, bucket_id):
+                return jsonify({'error': _GROUP_ERR.format(name=bucket['name'])}), 400
             if bucket['archived']:
                 return jsonify({'error': 'Cannot add a transaction to an archived bucket'}), 400
             if amount < 0:
@@ -1174,6 +1419,8 @@ def update_transaction(tx_id):
             bucket = _own_bucket(conn, bucket_id, "b.name, b.archived")
             if not bucket:
                 return jsonify({'error': 'Bucket not found'}), 404
+            if _is_parent(conn, bucket_id):
+                return jsonify({'error': _GROUP_ERR.format(name=bucket['name'])}), 400
             if bucket['archived']:
                 return jsonify({'error': 'Cannot add a transaction to an archived bucket'}), 400
             if amount < 0:
@@ -1227,11 +1474,12 @@ def get_deleted_transactions():
             if not _own_account(conn, acct_id):
                 return jsonify([])
             rows = conn.execute(
-                """SELECT t.id, t.tx_date, b.name AS bucket, t.bucket_id,
-                          t.amount, t.note, t.posted, t.linked_tx_id
-                   FROM transactions t
-                   JOIN buckets b ON b.id = t.bucket_id
-                   WHERE b.acct_id = ? AND t.deleted=1
+                f"""SELECT t.id, t.tx_date, {_QUALIFIED_NAME} AS bucket, t.bucket_id,
+                           t.amount, t.note, t.posted, t.linked_tx_id
+                    FROM transactions t
+                    JOIN buckets b ON b.id = t.bucket_id
+                    {_QUALIFY_JOIN}
+                    WHERE b.acct_id = ? AND t.deleted=1
                    ORDER BY t.tx_date DESC, t.sort_order DESC, t.id DESC""",
                 (acct_id,),
             ).fetchall()
@@ -1493,9 +1741,11 @@ def export_transactions():
             if not _own_account(conn, acct_id):
                 return jsonify({'error': 'Account not found'}), 404
             rows = conn.execute(
-                """SELECT t.tx_date, b.name AS bucket, t.amount, t.note, t.posted
+                f"""SELECT t.tx_date, {_QUALIFIED_NAME} AS bucket, t.amount,
+                           t.note, t.posted
                    FROM transactions t
                    JOIN buckets b ON b.id = t.bucket_id
+                   {_QUALIFY_JOIN}
                    WHERE b.acct_id = ? AND t.deleted=0
                    ORDER BY t.tx_date ASC, t.sort_order ASC, t.id ASC""",
                 (acct_id,),
@@ -1532,7 +1782,9 @@ def summary():
                 return jsonify({})
             total_balance = _account_balance(conn, acct_id)
             bucket_count  = conn.execute(
-                "SELECT COUNT(*) FROM buckets WHERE acct_id=? AND archived=0", (acct_id,)
+                """SELECT COUNT(*) FROM buckets b WHERE acct_id=? AND archived=0
+                     AND NOT EXISTS (SELECT 1 FROM buckets c WHERE c.parent_id = b.id)""",
+                (acct_id,)
             ).fetchone()[0]
             tx_count = conn.execute(
                 """SELECT COUNT(*) FROM transactions t
@@ -1801,6 +2053,7 @@ def iou_transactions():
                 FROM transactions t
                 JOIN buckets b ON b.id = t.bucket_id
                 JOIN accounts a ON a.id = b.acct_id
+                """ + _QUALIFY_JOIN + """
                 WHERE a.user_id = ? AND t.deleted=0
             """
             params = [uid]
@@ -1811,7 +2064,8 @@ def iou_transactions():
             total  = conn.execute("SELECT COUNT(*) " + base_sql, params).fetchone()[0]
             offset = (page - 1) * per_page
             rows   = conn.execute(
-                "SELECT t.id, t.tx_date, t.amount, t.note, b.name AS bucket, t.bucket_id"
+                f"SELECT t.id, t.tx_date, t.amount, t.note,"
+                f" {_QUALIFIED_NAME} AS bucket, t.bucket_id"
                 + base_sql
                 + " ORDER BY t.tx_date DESC, t.sort_order DESC, t.id DESC LIMIT ? OFFSET ?",
                 params + [per_page, offset],
@@ -1847,12 +2101,19 @@ def iou_transactions():
 # ---------------------------------------------------------------------------
 
 def _user_buckets(conn, acct_id, user_id):
-    """Non-archived buckets for an account the user actually owns."""
+    """Non-archived, spendable buckets for an account the user actually owns.
+
+    Groups are left out — they hold no money — and the names come back
+    qualified, because two groups may each have a "Gas" and the model is asked
+    to answer with a name."""
     return conn.execute(
-        """SELECT b.id, b.name, b.is_settlement
-           FROM buckets b JOIN accounts a ON a.id = b.acct_id
-           WHERE b.acct_id=? AND a.user_id=? AND b.archived=0
-           ORDER BY b.name""",
+        f"""SELECT b.id, {_QUALIFIED_NAME} AS name, b.is_settlement
+            FROM buckets b
+            JOIN accounts a ON a.id = b.acct_id
+            {_QUALIFY_JOIN}
+            WHERE b.acct_id=? AND a.user_id=? AND b.archived=0
+              AND NOT EXISTS (SELECT 1 FROM buckets c WHERE c.parent_id = b.id)
+            ORDER BY name""",
         (acct_id, user_id),
     ).fetchall()
 
@@ -1898,11 +2159,12 @@ def parse_receipt():
             # The user's own history is what teaches the model that a given
             # cryptic vendor string means Groceries *for them*.
             examples = conn.execute(
-                """SELECT t.note, b.name FROM transactions t
-                   JOIN buckets b ON b.id = t.bucket_id
-                   JOIN accounts a ON a.id = b.acct_id
-                   WHERE a.user_id=? AND t.deleted=0 AND t.note != ''
-                     AND b.is_settlement=0
+                f"""SELECT t.note, {_QUALIFIED_NAME} AS name FROM transactions t
+                    JOIN buckets b ON b.id = t.bucket_id
+                    JOIN accounts a ON a.id = b.acct_id
+                    {_QUALIFY_JOIN}
+                    WHERE a.user_id=? AND t.deleted=0 AND t.note != ''
+                      AND b.is_settlement=0
                    ORDER BY t.id DESC LIMIT 40""",
                 (current_user_id(),),
             ).fetchall()
@@ -1948,7 +2210,8 @@ def create_transactions_batch():
                 for r in conn.execute(
                     """SELECT b.id, b.name FROM buckets b
                        JOIN accounts a ON a.id = b.acct_id
-                       WHERE a.user_id=? AND b.archived=0""",
+                       WHERE a.user_id=? AND b.archived=0
+                         AND NOT EXISTS (SELECT 1 FROM buckets c WHERE c.parent_id = b.id)""",
                     (current_user_id(),),
                 ).fetchall()
             }

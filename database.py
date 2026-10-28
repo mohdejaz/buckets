@@ -175,6 +175,21 @@ def init_db(seed=True):
         )
         conn.commit()
 
+    # ── Schema migration: add parent_id to buckets ───────────────────────────
+    # One level of grouping: a bucket with children is a roll-up, not a pot —
+    # the children hold the money and the parent row shows their totals. That
+    # keeps every account-level number correct without touching it, because
+    # balances are summed from transactions and a parent holds none.
+    # NULL = top level, which is what every bucket was before the column.
+    if 'parent_id' not in bkt_cols:
+        cur.execute(
+            "ALTER TABLE buckets ADD COLUMN parent_id INTEGER REFERENCES buckets(id)"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_buckets_parent ON buckets(parent_id)"
+        )
+        conn.commit()
+
     # ── Schema migration: add linked_tx_id / deleted to transactions ─────────
     tx_cols = [r[1] for r in cur.execute("PRAGMA table_info(transactions)").fetchall()]
     if 'deleted' not in tx_cols:

@@ -466,6 +466,26 @@ tr.bucket-overdrawn > td { background: var(--negative-bg); }
 .refill-mode:hover { background: var(--neutral-bg); }
 .refill-mode .text-decoration-line-through { color: #94a3b8; }
 
+/* A group row is a total, not a bucket: tinted so the eye reads it as a header,
+   and its children sit indented beneath it with a tick instead of a number. */
+.bucket-group > td { background: var(--neutral-bg); }
+.bucket-group-toggle {
+  background: none; border: 0; padding: 0; color: inherit; cursor: pointer;
+  display: inline-flex; align-items: center; gap: .4rem;
+}
+.bucket-group-toggle .bi { font-size: .75rem; color: #64748b; }
+.bucket-group-toggle:hover strong { text-decoration: underline; }
+.badge-group {
+  background: #e2e8f0; color: #475569; font-size: .68rem; font-weight: 700;
+  padding: .05em .45em; border-radius: 20px;
+}
+/* A sub-bucket's refill cell reports what its group decided — same shape as
+   the control above it, but plainly not clickable. */
+.refill-mode-static { display: inline-block; padding: .1rem .25rem; cursor: default; }
+.refill-mode-static .text-decoration-line-through { color: #94a3b8; }
+.bucket-child td:nth-child(2) { padding-left: 2rem; }
+.bucket-child-tick { color: #94a3b8; margin-right: .35rem; }
+
 /* Posted state is an icon alone — the column header already says "Posted", so
    the word on every row was redundant. title/aria-label carry the meaning for
    hover and screen readers. */

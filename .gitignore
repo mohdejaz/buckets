@@ -228,3 +228,4 @@ __marimo__/
 # committed or shipped again if a re-encode leaves one lying around.
 Buckets.mov
 media/buckets-intro.mp4
+buckets.db.bak-*
