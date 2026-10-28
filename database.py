@@ -163,6 +163,18 @@ def init_db(seed=True):
         )
         conn.commit()
 
+    # ── Schema migration: add auto_refill to buckets ─────────────────────────
+    # Opts a bucket out of "Refill All" while leaving its budget and refill
+    # factor intact, so it can still be topped up by hand one refill at a time.
+    # A factor of 0 could not express this: it zeroes the amount everywhere,
+    # including a manual refill. Defaults to 1 (included), which is what every
+    # existing bucket was doing before the column existed.
+    if 'auto_refill' not in bkt_cols:
+        cur.execute(
+            "ALTER TABLE buckets ADD COLUMN auto_refill INTEGER NOT NULL DEFAULT 1"
+        )
+        conn.commit()
+
     # ── Schema migration: add linked_tx_id / deleted to transactions ─────────
     tx_cols = [r[1] for r in cur.execute("PRAGMA table_info(transactions)").fetchall()]
     if 'deleted' not in tx_cols:

@@ -420,7 +420,13 @@ const Buckets = {
         <td class="text-end font-monospace">${fmt(b.budget)}</td>
         <td class="text-end font-monospace ${balClass(b.balance)}">${fmt(b.balance)}</td>
         <td class="text-end font-monospace text-success">${fmt(b.refill_mtd)}</td>
-        <td class="text-end">${b.refill_factor}×</td>
+        <td class="text-end">
+          <button type="button" class="refill-mode" onclick="Buckets.toggleAutoRefill(${b.id})"
+                  title="${b.auto_refill ? 'Included in Refill All — click to exclude' : 'Excluded from Refill All — click to include'}">
+            <span class="font-monospace${b.auto_refill ? '' : ' text-decoration-line-through'}">${b.refill_factor}×</span>
+            ${b.auto_refill ? '' : '<span class="badge-manual">Manual</span>'}
+          </button>
+        </td>
         <td class="text-center">
           <button class="action-btn action-btn-refill me-1" onclick="Buckets.refill(${b.id})" title="Refill from Settlement">
             <i class="bi bi-plus-circle"></i>
@@ -479,6 +485,7 @@ const Buckets = {
     $('bucketName').value = '';
     $('bucketBudget').value = '0';
     $('bucketRefillFactor').value = '1.0';
+    $('bucketAutoRefill').checked = true;
     $('bucketForm').classList.remove('was-validated');
     this.modal.show();
   },
@@ -491,6 +498,7 @@ const Buckets = {
     $('bucketName').value = b.name;
     $('bucketBudget').value = b.budget;
     $('bucketRefillFactor').value = b.refill_factor;
+    $('bucketAutoRefill').checked = b.auto_refill !== false;
     $('bucketForm').classList.remove('was-validated');
     this.modal.show();
   },
@@ -508,6 +516,7 @@ const Buckets = {
       name: $('bucketName').value.trim(),
       budget: parseFloat($('bucketBudget').value) || 0,
       refill_factor: Number.isFinite(factor) ? factor : 1.0,
+      auto_refill: $('bucketAutoRefill').checked,
       acct_id: State.accountId,
     };
     try {
@@ -521,6 +530,26 @@ const Buckets = {
       this.modal.hide();
       await this.load();
       App.refreshBalances();
+    } catch (e) { showError(e.message); }
+  },
+
+  // Flipping a bucket in or out of "Refill All" is the one bucket setting
+  // worth changing without opening the modal, so the Refill Factor cell is the
+  // control. The PUT wants the whole bucket, so the unchanged fields ride along.
+  async toggleAutoRefill(id) {
+    const b = State.buckets.find(x => x.id === id);
+    if (!b) return;
+    try {
+      await api('PUT', `/api/buckets/${id}`, {
+        name: b.name,
+        budget: b.budget,
+        refill_factor: b.refill_factor,
+        auto_refill: !b.auto_refill,
+      });
+      toast(b.auto_refill
+        ? `"${b.name}" excluded from Refill All — manual refills only`
+        : `"${b.name}" included in Refill All`);
+      await this.load();
     } catch (e) { showError(e.message); }
   },
 
@@ -648,7 +677,11 @@ const Buckets = {
 
   async refillAll() {
     if (!State.accountId) { showError('Please select an account first.'); return; }
-    const txDate = await confirm('Transfer from Settlement into all buckets based on their budget and refill factor?', 'Refill All', false, { date: true });
+    const skipped = State.buckets.filter(
+      b => !b.is_settlement && !b.auto_refill && b.budget > 0 && b.refill_factor > 0).length;
+    const msg = 'Transfer from Settlement into all buckets based on their budget and refill factor?'
+      + (skipped ? ` ${skipped} manual-only bucket(s) will be skipped.` : '');
+    const txDate = await confirm(msg, 'Refill All', false, { date: true });
     if (!txDate) return;
     try {
       const res = await api('POST', '/api/buckets/refill-all', { acct_id: State.accountId, tx_date: txDate });

@@ -455,6 +455,17 @@ body {
 tr.bucket-overdrawn > td { background: var(--negative-bg); }
 .badge-overdraft { background: var(--negative-bg); color: var(--negative); font-size: .68rem; font-weight: 700; padding: .15em .5em; border-radius: 20px; margin-left: .4rem; white-space: nowrap; }
 
+/* "Manual" marks a bucket that Refill All skips. It sits in the Refill Factor
+   cell — the column it is about — and the whole cell is the toggle, so the
+   setting needs no icon of its own in the Actions column. */
+.badge-manual { background: var(--neutral-bg); color: #64748b; font-size: .68rem; font-weight: 700; padding: .15em .5em; border-radius: 20px; margin-left: .4rem; white-space: nowrap; }
+.refill-mode {
+  background: none; border: 0; padding: .1rem .25rem; border-radius: var(--radius-sm);
+  color: inherit; cursor: pointer; white-space: nowrap;
+}
+.refill-mode:hover { background: var(--neutral-bg); }
+.refill-mode .text-decoration-line-through { color: #94a3b8; }
+
 /* Posted state is an icon alone — the column header already says "Posted", so
    the word on every row was redundant. title/aria-label carry the meaning for
    hover and screen readers. */
