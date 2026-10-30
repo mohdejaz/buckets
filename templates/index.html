@@ -92,9 +92,11 @@
           <span class="user-chip-email">{{ user_email }}</span>
         </div>
       </div>
+      {% if has_intro %}
       <button class="btn-logout w-100 mt-1" id="btnWatchIntroSidebar">
         <i class="bi bi-play-circle me-1"></i>Watch Intro
       </button>
+      {% endif %}
       <div class="d-flex gap-2 mt-1">
         <button class="btn-logout flex-fill" id="btnChangePasswordSidebar">
           <i class="bi bi-key me-1"></i>Password
@@ -121,9 +123,11 @@
           <div class="topbar-user-name">{{ user_name }}</div>
           <div class="topbar-user-email">{{ user_email }}</div>
         </div>
+        {% if has_intro %}
         <button class="btn btn-sm btn-outline-primary ms-2" id="btnWatchIntro" title="Watch the intro tour">
           <i class="bi bi-play-circle"></i>
         </button>
+        {% endif %}
         <button class="btn btn-sm btn-outline-primary" id="btnChangePassword" title="Change Password">
           <i class="bi bi-key"></i>
         </button>
@@ -627,15 +631,18 @@
           </div>
           <div class="row g-3">
             <div class="col-6" id="bucketBudgetCol">
-              <label class="form-label fw-semibold">Budget</label>
+              <!-- Reads "Budget" on a scheduled bucket, "Target (optional)" on
+                   an ad-hoc one, where nothing is computed from it. -->
+              <label class="form-label fw-semibold" id="bucketBudgetLabel"
+                     for="bucketBudget">Budget</label>
               <div class="input-group">
                 <span class="input-group-text">$</span>
                 <input type="number" class="form-control" id="bucketBudget" step="0.01" min="0" value="0"/>
               </div>
               <div class="form-text d-none" id="bucketBudgetHelp"></div>
             </div>
-            <!-- Hidden for a group: a group has no budget of its own to apply a
-                 factor to, so the factor belongs to each sub-bucket. -->
+            <!-- Hidden for an ad-hoc bucket: nothing is computed from a
+                 factor when the amount is typed at each refill. -->
             <div class="col-6" id="bucketFactorCol">
               <label class="form-label fw-semibold">Refill Factor</label>
               <input type="number" class="form-control" id="bucketRefillFactor" step="0.01" min="0" max="10" value="1.0"/>
@@ -643,18 +650,52 @@
             </div>
           </div>
           <div class="mt-3">
-            <label class="form-label fw-semibold">Parent bucket</label>
-            <select class="form-select" id="bucketParent">
-              <option value="">— None (top level) —</option>
+            <label class="form-label fw-semibold" for="bucketGroup">Group</label>
+            <select class="form-select" id="bucketGroup"
+                    onchange="Buckets._syncNewGroup()">
+              <option value="">— None (ungrouped) —</option>
             </select>
-            <div class="form-text" id="bucketParentHelp">
-              Put this bucket inside a group. The group's budget and balance are its sub-buckets' totals.
+            <!-- Swapped in by "+ New group…": a group is only a name, so
+                 creating one and joining it is a single field and one save. -->
+            <div class="input-group d-none" id="bucketNewGroupWrap">
+              <input type="text" class="form-control" id="bucketNewGroup"
+                     maxlength="100" placeholder="New group name"/>
+              <button type="button" class="btn btn-outline-secondary"
+                      onclick="Buckets.cancelNewGroup()">Cancel</button>
+            </div>
+            <div class="form-text" id="bucketGroupHelp">
+              Buckets in a group are listed together. Nothing else about them changes.
             </div>
           </div>
-          <div class="form-check form-switch mt-3">
-            <input class="form-check-input" type="checkbox" id="bucketAutoRefill" checked/>
-            <label class="form-check-label" for="bucketAutoRefill">Include in <strong>Refill All</strong></label>
-            <div class="form-text" id="bucketAutoRefillHelp">Off = this bucket is skipped by Refill All and can only be refilled by hand. On a group, that covers every sub-bucket under it.</div>
+          <div class="mt-3">
+            <label class="form-label fw-semibold d-block mb-2">Refill</label>
+            <div class="refill-choice">
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="bucketRefillChoice"
+                       id="bucketRefillAuto" value="auto" checked/>
+                <label class="form-check-label" for="bucketRefillAuto">
+                  <strong>Scheduled</strong> — included in Refill All
+                  <span class="d-block form-text mt-0">Budget &times; factor, every Refill All.</span>
+                </label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="bucketRefillChoice"
+                       id="bucketRefillManual" value="manual"/>
+                <label class="form-check-label" for="bucketRefillManual">
+                  <strong>Scheduled</strong> — by hand only
+                  <span class="d-block form-text mt-0">The same fixed amount, but you pick when.</span>
+                </label>
+              </div>
+              <div class="form-check">
+                <input class="form-check-input" type="radio" name="bucketRefillChoice"
+                       id="bucketRefillAdhoc" value="adhoc"/>
+                <label class="form-check-label" for="bucketRefillAdhoc">
+                  <strong>Ad hoc</strong> — amount and timing by hand
+                  <span class="d-block form-text mt-0">No fixed amount; you type it each refill.</span>
+                </label>
+              </div>
+            </div>
+            <div class="form-text" id="bucketRefillModeHelp"></div>
           </div>
         </form>
       </div>
@@ -919,10 +960,23 @@
       </div>
       <div class="modal-body pt-0">
         <div id="confirmMessage">Are you sure?</div>
+        <!-- Shown only for an ad-hoc refill, where there is no budget x factor
+             to fall back on and the amount has to be typed. -->
+        <div class="mt-3 d-none" id="confirmAmountWrap">
+          <label class="form-label fw-semibold" for="confirmAmount">Amount</label>
+          <div class="input-group input-group-sm">
+            <span class="input-group-text">$</span>
+            <input type="number" class="form-control text-end" id="confirmAmount"
+                   step="0.01" min="0" placeholder="0.00"/>
+          </div>
+          <div class="form-text" id="confirmAmountHelp"></div>
+        </div>
         <div class="mt-3 d-none" id="confirmDateWrap">
           <label class="form-label fw-semibold" for="confirmDate">Date</label>
           <input type="date" class="form-control form-control-sm" id="confirmDate"/>
         </div>
+        <div class="alert alert-warning py-2 px-3 mt-3 mb-0 small d-none"
+             id="confirmWarning"></div>
       </div>
       <div class="modal-footer border-0">
         <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancel</button>
@@ -945,6 +999,7 @@
 </div>
 
 <!-- Intro / Walkthrough Modal -->
+{% if has_intro %}
 <div class="modal fade" id="introModal" tabindex="-1">
   <div class="modal-dialog modal-lg modal-dialog-centered">
     <div class="modal-content">
@@ -968,6 +1023,7 @@
     </div>
   </div>
 </div>
+{% endif %}
 
 <!-- Change Password Modal -->
 <div class="modal fade" id="changePasswordModal" tabindex="-1">

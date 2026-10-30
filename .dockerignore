@@ -3,6 +3,10 @@
 .envrc
 buckets.db
 buckets.db-journal
+# Hand-made backups taken before a migration. .gitignore already keeps these
+# out of the repo; without the same rule here, COPY . . would bake a full copy
+# of the real database into a published image.
+buckets.db.bak-*
 
 venv/
 __pycache__/
@@ -18,7 +22,7 @@ run.sh
 run.bat
 docker-compose.yml
 
-# The QuickTime original of the walkthrough. media/buckets-intro-small.mp4 is
-# the one that ships; keep the full-size source out of the image — COPY . .
-# would otherwise bake it in whether or not git tracks it.
-Buckets.mov
+# Raw screen recordings. The tour is optional — the app leaves every control
+# that opens it out of the page when media/ has no recording — so an unpruned
+# original must never be baked into an image by COPY . .
+*.mov

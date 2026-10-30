@@ -16,6 +16,12 @@
     .auth-brand-name { font-size: 1.4rem; font-weight: 700; color: #fff; display: block; }
     .auth-brand-sub  { font-size: .8rem; color: rgba(255,255,255,.65); display: block; margin-top: .15rem; }
     .auth-body { padding: 2rem; }
+    /* With no tour button to introduce, "New to Buckets?" is the last thing in
+       the card and leads straight into the invite line in the footer. Drop its
+       trailing margin and the card's base padding so the two read as one
+       thought instead of being pushed apart by ~68px of dead space. */
+    .auth-body--tight { padding-bottom: .75rem; }
+    .auth-body--tight .divider { margin-bottom: 0; }
     .auth-title { font-size: 1.05rem; font-weight: 700; color: #1e293b; margin-bottom: 1.5rem; }
     .form-label { font-size: .82rem; font-weight: 600; color: #475569; }
     .form-control { font-size: .88rem; border-color: #cbd5e1; border-radius: 8px; padding: .6rem .85rem; }
@@ -46,7 +52,7 @@
     <span class="auth-brand-sub">Personal Budget Manager</span>
   </div>
 
-  <div class="auth-body">
+  <div class="auth-body{% if not has_intro %} auth-body--tight{% endif %}">
     <div class="auth-title"><i class="bi bi-box-arrow-in-right me-2 text-primary"></i>Sign In to Your Account</div>
 
     {% if error %}
@@ -88,9 +94,11 @@
 
     <div class="divider">New to Buckets?</div>
 
+    {% if has_intro %}
     <button type="button" class="btn-tour" data-bs-toggle="modal" data-bs-target="#tourModal">
       <i class="bi bi-play-circle"></i>Watch the 90-second tour
     </button>
+    {% endif %}
   </div>
 
   <div class="auth-footer">
@@ -111,6 +119,7 @@
 </div>
 
 <!-- Tour Modal -->
+{% if has_intro %}
 <div class="modal fade" id="tourModal" tabindex="-1">
   <div class="modal-dialog modal-lg modal-dialog-centered">
     <div class="modal-content">
@@ -129,6 +138,7 @@
     </div>
   </div>
 </div>
+{% endif %}
 
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script>
@@ -136,12 +146,16 @@
   sessionStorage.removeItem('bucketsShown');
   sessionStorage.removeItem('txShown');
 
+  // Absent when no walkthrough recording is installed — the whole tour is
+  // left out of the page rather than offered and then failing to play.
   const tourModal = document.getElementById('tourModal');
   const tourVideo = document.getElementById('tourVideo');
-  tourModal.addEventListener('show.bs.modal', function () {
-    if (!tourVideo.src) tourVideo.src = '/media/intro.mp4';
-  });
-  tourModal.addEventListener('hidden.bs.modal', function () { tourVideo.pause(); });
+  if (tourModal && tourVideo) {
+    tourModal.addEventListener('show.bs.modal', function () {
+      if (!tourVideo.src) tourVideo.src = '/media/intro.mp4';
+    });
+    tourModal.addEventListener('hidden.bs.modal', function () { tourVideo.pause(); });
+  }
 
   document.getElementById('togglePwd').addEventListener('click', function () {
     const inp = document.getElementById('password');

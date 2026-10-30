@@ -91,6 +91,13 @@ def init_db(seed=True):
             FOREIGN KEY (acct_id) REFERENCES accounts(id)
         );
 
+        CREATE TABLE IF NOT EXISTS bucket_groups (
+            id         INTEGER PRIMARY KEY AUTOINCREMENT,
+            name       TEXT NOT NULL,
+            acct_id    INTEGER NOT NULL,
+            FOREIGN KEY (acct_id) REFERENCES accounts(id)
+        );
+
         CREATE TABLE IF NOT EXISTS transactions (
             id        INTEGER PRIMARY KEY AUTOINCREMENT,
             tx_date   TEXT NOT NULL,
@@ -175,18 +182,78 @@ def init_db(seed=True):
         )
         conn.commit()
 
-    # ── Schema migration: add parent_id to buckets ───────────────────────────
-    # One level of grouping: a bucket with children is a roll-up, not a pot —
-    # the children hold the money and the parent row shows their totals. That
-    # keeps every account-level number correct without touching it, because
-    # balances are summed from transactions and a parent holds none.
-    # NULL = top level, which is what every bucket was before the column.
-    if 'parent_id' not in bkt_cols:
+    # ── Schema migration: add group_id to buckets ────────────────────────────
+    # Grouping is a label, not a container: every bucket holds its own money and
+    # answers for its own budget and refill settings, and a group only decides
+    # which buckets are displayed together. NULL = ungrouped.
+    #
+    # This replaces the earlier sub-bucket scheme, where a bucket with children
+    # became a roll-up that held nothing. That made a group a second kind of
+    # bucket — one that could not take a transaction, a transfer or a refill —
+    # and every write path needed a guard saying so. A label needs none.
+    if 'group_id' not in bkt_cols:
         cur.execute(
-            "ALTER TABLE buckets ADD COLUMN parent_id INTEGER REFERENCES buckets(id)"
+            "ALTER TABLE buckets ADD COLUMN group_id INTEGER"
+            " REFERENCES bucket_groups(id)"
         )
         cur.execute(
-            "CREATE INDEX IF NOT EXISTS idx_buckets_parent ON buckets(parent_id)"
+            "CREATE INDEX IF NOT EXISTS idx_buckets_group ON buckets(group_id)"
+        )
+        conn.commit()
+
+    # ── Data migration: sub-buckets become groups ────────────────────────────
+    # Each parent becomes a group of the same name and its children become
+    # ordinary buckets inside it. The children already held all the money, so
+    # no balance moves. The parent row itself held none by construction and is
+    # dropped — unless it somehow has history, in which case it is kept as an
+    # ordinary member rather than deleted.
+    if 'parent_id' in bkt_cols:
+        parents = cur.execute(
+            """SELECT p.id, p.name, p.acct_id FROM buckets p
+               WHERE EXISTS (SELECT 1 FROM buckets k WHERE k.parent_id = p.id)"""
+        ).fetchall()
+        for parent_id, name, acct_id in parents:
+            cur.execute(
+                "INSERT INTO bucket_groups (name, acct_id) VALUES (?,?)",
+                (name, acct_id),
+            )
+            group_id = cur.lastrowid
+            cur.execute(
+                "UPDATE buckets SET group_id=? WHERE parent_id=?",
+                (group_id, parent_id),
+            )
+            history = cur.execute(
+                "SELECT (SELECT COUNT(*) FROM transactions WHERE bucket_id=?)"
+                "     + (SELECT COUNT(*) FROM upcoming_expenses WHERE bucket_id=?)",
+                (parent_id, parent_id),
+            ).fetchone()[0]
+            if history:
+                cur.execute(
+                    "UPDATE buckets SET group_id=? WHERE id=?", (group_id, parent_id))
+            else:
+                cur.execute("DELETE FROM buckets WHERE id=?", (parent_id,))
+
+        # SQLite refuses to drop an indexed column, so the index goes first.
+        cur.execute("DROP INDEX IF EXISTS idx_buckets_parent")
+        cur.execute("ALTER TABLE buckets DROP COLUMN parent_id")
+        conn.commit()
+
+    # ── Schema migration: add refill_mode to buckets ─────────────────────────
+    # How a bucket gets topped up, which auto_refill alone could not say:
+    #   'scheduled' — a fixed budget x refill_factor, the original behaviour.
+    #                 auto_refill then decides whether Refill All does it for
+    #                 you or you trigger that same amount by hand.
+    #   'adhoc'     — no fixed amount at all. Refill All always skips it and
+    #                 the amount is typed per refill, so budget is only ever a
+    #                 target to aim at and refill_factor has nothing to apply
+    #                 to. The stored factor is left alone for the day the
+    #                 bucket is switched back to scheduled.
+    # Defaults to 'scheduled', which is what every existing bucket was doing
+    # before the column existed.
+    if 'refill_mode' not in bkt_cols:
+        cur.execute(
+            "ALTER TABLE buckets ADD COLUMN refill_mode TEXT NOT NULL"
+            " DEFAULT 'scheduled'"
         )
         conn.commit()
 
