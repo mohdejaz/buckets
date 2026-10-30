@@ -89,6 +89,12 @@ function buildPagination(containerId, currentPage, totalPages, onPage) {
 // With `opts.date`, the dialog also asks which day to book on and resolves to
 // that ISO date instead of `true` — still falsy only when dismissed, so
 // `if (!ok) return;` reads the same at every call site.
+//
+// `opts.amount` adds a money field for the one case that has no amount to
+// compute — an ad-hoc refill. It resolves to `{ amount, date }` instead, and
+// takes `{ max, maxLabel, help }` so the dialog can show the ceiling the
+// server will enforce and refuse to submit past it, rather than letting the
+// click through to a rejected save.
 function confirm(msg, label = 'Delete', danger = true, opts = {}) {
   return new Promise(resolve => {
     $('confirmMessage').textContent = msg;
@@ -99,19 +105,61 @@ function confirm(msg, label = 'Delete', danger = true, opts = {}) {
     const dateInput = $('confirmDate');
     dateWrap.classList.toggle('d-none', !opts.date);
     if (opts.date) dateInput.value = today();
+
+    const amountOpts = opts.amount
+      ? (opts.amount === true ? {} : opts.amount)
+      : null;
+    const amountWrap = $('confirmAmountWrap');
+    const amountInput = $('confirmAmount');
+    const amountHelp = $('confirmAmountHelp');
+    const warn = $('confirmWarning');
+    amountWrap.classList.toggle('d-none', !amountOpts);
+    warn.classList.add('d-none');
+    if (amountOpts) {
+      amountInput.value = '';
+      amountHelp.textContent = amountOpts.help || '';
+    }
+
+    // Same three guards the server applies, checked while they can still be
+    // fixed: a positive amount, and not more than the source holds.
+    const validate = () => {
+      if (!amountOpts) return true;
+      const value = parseFloat(amountInput.value);
+      const amount = Number.isFinite(value) ? value : 0;
+      const over = amountOpts.max != null && amount > amountOpts.max + 0.004;
+      if (amount < 0) {
+        warn.textContent = 'A refill amount cannot be negative.';
+      } else if (over) {
+        warn.textContent = `That is ${fmt(amount - amountOpts.max)} more than `
+          + `${amountOpts.maxLabel || 'the source'} holds (${fmt(amountOpts.max)}).`;
+      }
+      warn.classList.toggle('d-none', amount >= 0 && !over);
+      const ok = amount > 0 && !over;
+      btn.disabled = !ok;
+      return ok;
+    };
+    validate();
+
     const modal = new bootstrap.Modal($('confirmModal'));
     const onOk = () => {
-      const value = opts.date ? (dateInput.value || today()) : true;
+      if (!validate()) return;
+      const date = opts.date ? (dateInput.value || today()) : true;
+      const value = amountOpts
+        ? { amount: parseFloat(amountInput.value), date }
+        : date;
       cleanup();
       modal.hide();
       resolve(value);
     };
     const onDismiss = () => { cleanup(); resolve(false); };
     const cleanup = () => {
+      btn.disabled = false;
       btn.removeEventListener('click', onOk);
+      amountInput.removeEventListener('input', validate);
       $('confirmModal').removeEventListener('hidden.bs.modal', onDismiss);
     };
     btn.addEventListener('click', onOk);
+    amountInput.addEventListener('input', validate);
     $('confirmModal').addEventListener('hidden.bs.modal', onDismiss, { once: true });
     modal.show();
   });
@@ -126,6 +174,7 @@ const State = {
   accounts: [],
   buckets: [],
   archivedBuckets: [],
+  bucketGroups: [],
   lastTxDate: null,
   currentBucketId: null,
   settlementBucketId: null,
@@ -273,10 +322,13 @@ const Accounts = {
 const Buckets = {
   modal: null,
   transferModal: null,
-
   init() {
     this.modal = new bootstrap.Modal($('bucketModal'));
     this.transferModal = new bootstrap.Modal($('transferModal'));
+    // Picking Ad hoc hides the refill factor and relabels the budget, so the
+    // modal follows the choice while it is open rather than only on open.
+    document.querySelectorAll('input[name="bucketRefillChoice"]')
+      .forEach(el => el.addEventListener('change', () => this._syncFields()));
     $('btnNewBucket').addEventListener('click', () => this.openNew());
     $('btnSaveBucket').addEventListener('click', () => this.save());
     $('btnTransfer').addEventListener('click', () => this.openTransfer());
@@ -293,12 +345,20 @@ const Buckets = {
     if (!State.accountId) {
       State.buckets = [];
       State.archivedBuckets = [];
+      State.bucketGroups = [];
       this.render();
       this.renderArchived();
       return;
     }
     try {
-      const all = await api('GET', `/api/buckets?acct_id=${State.accountId}&include_archived=1`);
+      // The group list is its own call because the modal's dropdown needs
+      // every group in the account, including ones whose buckets are all
+      // filtered out of the current view.
+      const [all, groups] = await Promise.all([
+        api('GET', `/api/buckets?acct_id=${State.accountId}&include_archived=1`),
+        api('GET', `/api/bucket-groups?acct_id=${State.accountId}`),
+      ]);
+      State.bucketGroups = groups;
       State.buckets = all.filter(b => !b.archived);
       State.archivedBuckets = all.filter(b => b.archived);
       const settlement = State.buckets.find(b => b.is_settlement);
@@ -340,15 +400,15 @@ const Buckets = {
       balEl.textContent = fmt(settlement.balance);
       balEl.className = `fw-bold fs-5 font-monospace ${balClass(settlement.balance)}`;
 
-      // Group rows carry their children's totals, so every sum here has to
-      // skip them or the same dollar is counted twice.
-      const totalVal = State.buckets.filter(b => !b.is_settlement && !b.is_parent)
+      // Every bucket holds its own money and a group row is drawn, not stored,
+      // so these are plain sums over the buckets themselves.
+      const totalVal = State.buckets.filter(b => !b.is_settlement)
         .reduce((sum, b) => sum + parseFloat(b.balance), 0);
       const totalEl = $('totalBucketBalance');
       totalEl.textContent = fmt(totalVal);
       totalEl.className = `fw-bold fs-5 font-monospace ${balClass(totalVal)}`;
 
-      const netVal = State.buckets.filter(b => !b.is_parent)
+      const netVal = State.buckets
         .reduce((sum, b) => sum + parseFloat(b.balance), 0);
       const netEl = $('netBalance');
       netEl.textContent = fmt(netVal);
@@ -368,7 +428,7 @@ const Buckets = {
     // Regular (non-settlement) buckets in the table
     this._allRows = State.buckets.filter(b => !b.is_settlement);
     this._shown = 0;
-    this._rowNo = 0;   // numbers top-level rows only; sub-buckets sit unnumbered
+    this._rowNo = 0;   // numbers buckets; a group header row is not numbered
     body.innerHTML = '';
 
     if (!this._allRows.length) {
@@ -387,9 +447,7 @@ const Buckets = {
   // The table pages in 25 rows at a time, but the footer sums every bucket the
   // filter matched — a total that grew as you clicked "More" would be a lie.
   _renderTotals() {
-    // Group rows are drawn but never summed — their numbers are the children's.
     const sum = key => this._allRows
-      .filter(b => !b.is_parent)
       .reduce((s, b) => s + parseFloat(b[key] || 0), 0);
     const budget = sum('budget');
     const balance = sum('balance');
@@ -412,16 +470,73 @@ const Buckets = {
   // group is a view preference for this sitting, not a saved setting.
   _collapsed: new Set(JSON.parse(sessionStorage.getItem('bucketsCollapsed') || '[]')),
 
-  // Children of a collapsed group are not drawn, and so do not eat into the
-  // page size either.
+  // What the table actually draws: the buckets, with a header item spliced in
+  // wherever the group changes. The server already returns them in group
+  // order, so this only has to notice the boundary.
+  //
+  // Headers are items in this list rather than something emitted inside the
+  // row loop, because the table pages 25 rows at a time — a group straddling
+  // a page boundary would otherwise lose its heading on the next page.
+  _renderList() {
+    const items = [];
+    let lastGroup;
+    for (const b of this._allRows) {
+      if (b.group_id !== lastGroup) {
+        lastGroup = b.group_id;
+        if (b.group_id) {
+          items.push({
+            header: true,
+            id: b.group_id,
+            name: b.group_name,
+            count: this._allRows.filter(x => x.group_id === b.group_id).length,
+          });
+        }
+      }
+      if (b.group_id && this._collapsed.has(b.group_id)) continue;
+      items.push({ header: false, b });
+    }
+    return items;
+  },
+
   _visibleRows() {
-    return this._allRows.filter(b => !(b.parent_id && this._collapsed.has(b.parent_id)));
+    return this._renderList();
   },
 
   toggleGroup(id) {
     if (this._collapsed.has(id)) this._collapsed.delete(id); else this._collapsed.add(id);
     sessionStorage.setItem('bucketsCollapsed', JSON.stringify([...this._collapsed]));
     this.render();
+  },
+
+  // A group is only a name, so renaming is the whole of editing one.
+  async renameGroup(id) {
+    const g = State.bucketGroups.find(x => x.id === id);
+    const name = prompt('Group name', g?.name || '');
+    if (name === null) return;
+    if (!name.trim()) { showError('A group needs a name.'); return; }
+    try {
+      await api('PUT', `/api/bucket-groups/${id}`, { name: name.trim() });
+      toast('Group renamed');
+      await this.load();
+    } catch (e) { showError(e.message); }
+  },
+
+  // Deleting a group ungroups its buckets: no money moves, they just stop
+  // being displayed together. Worth saying plainly, since "delete" next to a
+  // row full of balances reads like it might take them with it.
+  async ungroup(id) {
+    const g = State.bucketGroups.find(x => x.id === id);
+    const n = g?.bucket_count ?? 0;
+    const ok = await confirm(
+      `Remove the group "${g?.name}"? Its ${n} bucket(s) stay exactly as they are `
+      + 'with all their money — they just stop being grouped.',
+      'Remove group', false);
+    if (!ok) return;
+    try {
+      const res = await api('DELETE', `/api/bucket-groups/${id}`);
+      toast(`Group removed — ${res.ungrouped} bucket(s) ungrouped`);
+      await this.load();
+    } catch (e) { showError(e.message); }
   },
 
   _appendRows() {
@@ -431,59 +546,85 @@ const Buckets = {
     const next = rows.slice(this._shown, limit);
     this._shown = limit;
 
-    body.insertAdjacentHTML('beforeend', next.map(b => {
+    body.insertAdjacentHTML('beforeend', next.map(item => {
+      // A group header: a name, a count and a fold. It has no figures of its
+      // own, because a group stores nothing — the buckets below hold the money.
+      if (item.header) {
+        const collapsed = this._collapsed.has(item.id);
+        return `
+      <tr class="bucket-group-row">
+        <td></td>
+        <td colspan="5">
+          <button type="button" class="bucket-group-toggle" onclick="Buckets.toggleGroup(${item.id})"
+                  title="${collapsed ? 'Show' : 'Hide'} the buckets in this group">
+            <i class="bi bi-chevron-${collapsed ? 'right' : 'down'}"></i>
+            <span class="bucket-group-name">${esc(item.name)}</span>
+            <span class="badge-group">${item.count}</span>
+          </button>
+        </td>
+        <td class="text-center">
+          <button class="action-btn action-btn-edit me-1" onclick="Buckets.renameGroup(${item.id})"
+                  title="Rename this group">
+            <i class="bi bi-pencil"></i>
+          </button>
+          <button class="action-btn action-btn-delete" onclick="Buckets.ungroup(${item.id})"
+                  title="Remove the group — its buckets and their money stay, ungrouped">
+            <i class="bi bi-x-circle"></i>
+          </button>
+        </td>
+      </tr>`;
+      }
+
+      const b = item.b;
       const overdrawn = b.balance < 0;
-      const child = !!b.parent_id;
-      const collapsed = this._collapsed.has(b.id);
+      const grouped = !!b.group_id;
+      const adhoc = b.refill_mode === 'adhoc';
 
-      // A group names itself and folds; a leaf opens its ledger.
-      const nameCell = b.is_parent
-        ? `<button type="button" class="bucket-group-toggle" onclick="Buckets.toggleGroup(${b.id})"
-                   title="${collapsed ? 'Show' : 'Hide'} sub-buckets">
-             <i class="bi bi-chevron-${collapsed ? 'right' : 'down'}"></i>
-             <strong>${esc(b.name)}</strong>
-             <span class="badge-group">${b.child_count}</span>
-           </button>`
-        : `<a href="#" class="text-decoration-none" onclick="BucketDetail.open(${b.id}); return false;"><strong>${esc(b.name)}</strong></a>`;
+      const nameCell = `<a href="#" class="text-decoration-none" onclick="BucketDetail.open(${b.id}); return false;"><strong>${esc(b.name)}</strong></a>`;
 
-      // The Refill All switch belongs to the group, which answers for
-      // everything under it — so a sub-bucket's cell only reports, and the
-      // single control sits on the group row.
-      const factorText = b.is_parent
-        ? '<span class="text-muted">—</span>'
-        : `<span class="font-monospace${b.auto_refill ? '' : ' text-decoration-line-through'}">${b.refill_factor}×</span>`;
-      const manualBadge = b.auto_refill ? '' : '<span class="badge-manual">Manual</span>';
+      // An ad-hoc bucket has no factor to apply and no switch to flip — Refill
+      // All skips it either way — so the cell reports the mode rather than
+      // toggling it, and the choice is made in the edit modal.
+      const factorText = adhoc
+        ? '<span class="text-muted">\u2014</span>'
+        : `<span class="font-monospace${b.auto_refill ? '' : ' text-decoration-line-through'}">${b.refill_factor}\u00d7</span>`;
+      const modeBadge = adhoc
+        ? '<span class="badge-adhoc">Ad hoc</span>'
+        : (b.auto_refill ? '' : '<span class="badge-manual">Manual</span>');
 
-      const factorCell = child
+      // Grouping no longer decides anything about refills, so every bucket
+      // carries its own switch — including the ones inside a group.
+      const factorCell = adhoc
         ? `<span class="refill-mode-static"
-                 title="Follows its group — set Refill All on &quot;${esc(State.buckets.find(x => x.id === b.parent_id)?.name || '')}&quot;">
-             ${factorText}${manualBadge}
+                 title="Refilled ad hoc \u2014 Refill All skips it and the amount is typed each refill. Change this in Edit.">
+             ${factorText}${modeBadge}
            </span>`
         : `<button type="button" class="refill-mode" onclick="Buckets.toggleAutoRefill(${b.id})"
-                   title="${b.is_parent
-                     ? (b.auto_refill
-                         ? 'Refill All fills this group — click to exclude it and all its sub-buckets'
-                         : 'Refill All skips this group and all its sub-buckets — click to include')
-                     : (b.auto_refill
-                         ? 'Included in Refill All — click to exclude'
-                         : 'Excluded from Refill All — click to include')}">
-             ${factorText}${manualBadge}
+                   title="${b.auto_refill
+                     ? 'Included in Refill All \u2014 click to exclude'
+                     : 'Excluded from Refill All \u2014 click to include'}">
+             ${factorText}${modeBadge}
            </button>`;
 
       return `
-      <tr class="${overdrawn ? 'bucket-overdrawn' : ''}${b.is_parent ? ' bucket-group' : ''}${child ? ' bucket-child' : ''}">
-        <td class="text-muted">${child ? '' : ++this._rowNo}</td>
+      <tr class="${overdrawn ? 'bucket-overdrawn' : ''}${grouped ? ' bucket-grouped' : ''}">
+        <td class="text-muted">${++this._rowNo}</td>
         <td>
-          ${child ? '<span class="bucket-child-tick">\u203a</span>' : ''}${nameCell}
+          ${grouped ? `<span class="bucket-group-tick" title="In &quot;${esc(b.group_name)}&quot;">\u203a</span>` : ''}${nameCell}
           ${overdrawn ? '<span class="badge-overdraft"><i class="bi bi-exclamation-triangle-fill me-1"></i>Overdraft</span>' : ''}
         </td>
-        <td class="text-end font-monospace">${fmt(b.budget)}</td>
+        <td class="text-end font-monospace">${
+          // On an ad-hoc bucket the budget is only a target to aim at, and a
+          // target of 0 means there is none — "$0.00" would read as a bucket
+          // budgeted to nothing instead.
+          adhoc && !b.budget ? '<span class="text-muted">\u2014</span>' : fmt(b.budget)
+        }</td>
         <td class="text-end font-monospace ${balClass(b.balance)}">${fmt(b.balance)}</td>
         <td class="text-end font-monospace text-success">${fmt(b.refill_mtd)}</td>
         <td class="text-end">${factorCell}</td>
         <td class="text-center">
           <button class="action-btn action-btn-refill me-1" onclick="Buckets.refill(${b.id})"
-                  title="${b.is_parent ? 'Refill every sub-bucket from Settlement' : 'Refill from Settlement'}">
+                  title="Refill from Settlement">
             <i class="bi bi-plus-circle"></i>
           </button>
           <button class="action-btn action-btn-edit me-1" onclick="Buckets.openEdit(${b.id})" title="Edit">
@@ -499,8 +640,12 @@ const Buckets = {
       </tr>`;
     }).join(''));
 
+    // Paging counts every drawn row, group headings included, but the caption
+    // is about buckets — counting a heading as one would overstate the list.
     const total = rows.length;
-    $('bucketsInfo').textContent = `Showing ${this._shown} of ${total}`;
+    const buckets = rows.filter(r => !r.header).length;
+    const shown = rows.slice(0, this._shown).filter(r => !r.header).length;
+    $('bucketsInfo').textContent = `Showing ${shown} of ${buckets}`;
     const moreWrap = $('bucketsMoreWrap');
     if (this._shown < total) {
       moreWrap.classList.remove('d-none');
@@ -515,19 +660,19 @@ const Buckets = {
     this._appendRows();
   },
 
-  // Money can only land on a leaf, so a group becomes an <optgroup> label:
-  // the browser won't let anyone select it, which is the rule enforced for
-  // free in every dropdown that lists buckets.
+  // Every bucket can take money, so every bucket is selectable. A group is
+  // only a heading here: it keeps its buckets together and labels them, which
+  // matters because two groups may each hold a "Gas".
   bucketOptions(list) {
-    return list.map(b => {
-      if (b.parent_id) return '';        // drawn inside its group below
-      if (!b.is_parent) return `<option value="${b.id}">${esc(b.name)}</option>`;
-      const kids = list.filter(k => k.parent_id === b.id);
-      if (!kids.length) return '';       // a group whose children are filtered out
-      return `<optgroup label="${esc(b.name)}">`
-        + kids.map(k => `<option value="${k.id}">${esc(k.name)}</option>`).join('')
-        + '</optgroup>';
-    }).join('');
+    const groups = [...new Set(list.filter(b => b.group_id).map(b => b.group_id))];
+    const ungrouped = list.filter(b => !b.group_id);
+    return ungrouped.map(b => `<option value="${b.id}">${esc(b.name)}</option>`).join('')
+      + groups.map(gid => {
+          const members = list.filter(b => b.group_id === gid);
+          return `<optgroup label="${esc(members[0].group_name)}">`
+            + members.map(b => `<option value="${b.id}">${esc(b.name)}</option>`).join('')
+            + '</optgroup>';
+        }).join('');
   },
 
   populateBucketSelects() {
@@ -550,71 +695,99 @@ const Buckets = {
 
   // Only a top-level bucket can be a parent (one level deep), and a bucket
   // that is itself a group can't be filed under another.
-  // A sub-bucket inside an excluded group is excluded, whatever its own switch
-  // says. Showing that switch on and enabled would contradict both the table
-  // and what Refill All does, so it reads as off and locked, and the stored
-  // value is left alone (save omits the field) for when the group comes back.
-  // Budget and Refill Factor are a sub-bucket's business. A group owns neither:
-  // its budget is the children's total, and with no budget of its own there is
-  // nothing for a factor to multiply — so the factor is not offered at all and
-  // the budget is shown as the read-only sum it is.
-  _syncGroupFields(current) {
-    const isGroup = !!current?.is_parent;
+  // The three refill behaviours are one choice, so the modal offers one
+  // control. Underneath they are still two columns — refill_mode says whether
+  // there is a fixed amount at all, auto_refill whether Refill All moves it —
+  // and these two map between the pair and the radio group.
+  _refillChoice(current) {
+    if (current?.refill_mode === 'adhoc') return 'adhoc';
+    return current?.auto_refill === false ? 'manual' : 'auto';
+  },
+
+  _selectedChoice() {
+    return document.querySelector('input[name="bucketRefillChoice"]:checked')
+      ?.value || 'auto';
+  },
+
+  // Grouping decides nothing about money, so every bucket owns its own budget
+  // and refill settings and nothing in this modal is ever locked. The only
+  // field that moves is the refill factor: an ad-hoc bucket computes nothing
+  // from it, so it is hidden and the budget becomes a target to aim at.
+  _syncFields() {
+    const adhoc = this._selectedChoice() === 'adhoc';
     const factorCol = $('bucketFactorCol');
     const budgetCol = $('bucketBudgetCol');
-    const budget = $('bucketBudget');
+    const label = $('bucketBudgetLabel');
     const help = $('bucketBudgetHelp');
     if (!factorCol || !budgetCol) return;
 
-    factorCol.classList.toggle('d-none', isGroup);
-    budgetCol.classList.toggle('col-6', !isGroup);
-    budgetCol.classList.toggle('col-12', isGroup);
-    if (budget) budget.disabled = isGroup;
+    factorCol.classList.toggle('d-none', adhoc);
+    budgetCol.classList.toggle('col-6', !adhoc);
+    budgetCol.classList.toggle('col-12', adhoc);
+    if (label) label.textContent = adhoc ? 'Target (optional)' : 'Budget';
     if (help) {
-      help.classList.toggle('d-none', !isGroup);
-      help.textContent = isGroup
-        ? `Total of its ${current.child_count} sub-bucket(s) — set a budget on each one.`
+      const text = adhoc
+        ? "What you'd like to build up to. Leave it at 0 for no target — nothing"
+          + ' is refilled from it either way.'
         : '';
+      help.classList.toggle('d-none', !text);
+      help.textContent = text;
     }
   },
 
-  _syncAutoRefill(current) {
-    const box = $('bucketAutoRefill');
-    const help = $('bucketAutoRefillHelp');
-    if (!box) return;
-    const group = current?.parent_id &&
-      State.buckets.find(x => x.id === current.parent_id);
-
-    box.checked = current?.auto_refill !== false;
-    box.disabled = !!group;
-    if (help) {
-      help.textContent = group
-        ? `Set on its group instead — "${group.name}" decides this for every sub-bucket under it.`
-        : current?.is_parent
-          ? 'Off = Refill All skips this group and every sub-bucket under it. A manual refill still fills them.'
-          : 'Off = this bucket is skipped by Refill All and can only be refilled by hand.';
-    }
+  _syncRefillMode(current) {
+    const choice = this._refillChoice(current);
+    const radio = $(`bucketRefill${
+      { auto: 'Auto', manual: 'Manual', adhoc: 'Adhoc' }[choice]}`);
+    if (radio) radio.checked = true;
+    this._syncFields();
   },
 
-  _fillParentSelect(current) {
-    const sel = $('bucketParent');
+  // The group dropdown, plus the "+ New group" path that creates one by name
+  // in the same save. A group is only a label, so joining one changes nothing
+  // about the bucket's money or its refill settings.
+  _fillGroupSelect(current) {
+    const sel = $('bucketGroup');
     // A page served before this field existed (a long-running server still
     // holding the old template, or a cached tab) must not lose the ability to
     // create a bucket — the grouping control is the only thing missing.
     if (!sel) return;
-    const options = State.buckets.filter(b =>
-      !b.is_settlement && !b.parent_id && b.id !== current?.id);
-    sel.innerHTML = '<option value="">— None (top level) —</option>'
-      + options.map(b => `<option value="${b.id}">${esc(b.name)}</option>`).join('');
-    sel.value = current?.parent_id || '';
+    sel.innerHTML = '<option value="">— None (ungrouped) —</option>'
+      + State.bucketGroups.map(g =>
+          `<option value="${g.id}">${esc(g.name)}</option>`).join('')
+      + '<option value="__new">+ New group…</option>';
+    sel.value = current?.group_id || '';
 
-    // A group has sub-buckets hanging off it; moving it would orphan them.
-    const isGroup = !!current?.is_parent;
-    sel.disabled = isGroup;
-    const help = $('bucketParentHelp');
-    if (help) help.textContent = isGroup
-      ? `"${current.name}" is a group — move or delete its sub-buckets to file it elsewhere.`
-      : "Put this bucket inside a group. The group's budget and balance are its sub-buckets' totals.";
+    // Settlement funds every refill; it is not one of the buckets a group
+    // gathers together.
+    const isSettlement = !!current?.is_settlement;
+    sel.disabled = isSettlement;
+    const help = $('bucketGroupHelp');
+    if (help) help.textContent = isSettlement
+      ? 'Settlement cannot be grouped — it is the pool every other bucket is refilled from.'
+      : 'Buckets in a group are listed together. Nothing else about them changes.';
+    this._syncNewGroup();
+  },
+
+  // "+ New group…" swaps the dropdown for a name field. Leaving it cancels
+  // back to the selection the bucket already had.
+  _syncNewGroup() {
+    const sel = $('bucketGroup');
+    const wrap = $('bucketNewGroupWrap');
+    if (!sel || !wrap) return;
+    const creating = sel.value === '__new';
+    wrap.classList.toggle('d-none', !creating);
+    sel.classList.toggle('d-none', creating);
+    if (creating) {
+      $('bucketNewGroup').value = '';
+      $('bucketNewGroup').focus();
+    }
+  },
+
+  cancelNewGroup() {
+    const sel = $('bucketGroup');
+    if (sel) sel.value = this._editing?.group_id || '';
+    this._syncNewGroup();
   },
 
   openNew() {
@@ -624,9 +797,9 @@ const Buckets = {
     $('bucketName').value = '';
     $('bucketBudget').value = '0';
     $('bucketRefillFactor').value = '1.0';
-    this._syncGroupFields(null);
-    this._syncAutoRefill(null);
-    this._fillParentSelect(null);
+    this._editing = null;
+    this._syncRefillMode(null);
+    this._fillGroupSelect(null);
     $('bucketForm').classList.remove('was-validated');
     this.modal.show();
   },
@@ -639,9 +812,9 @@ const Buckets = {
     $('bucketName').value = b.name;
     $('bucketBudget').value = b.budget;
     $('bucketRefillFactor').value = b.refill_factor;
-    this._syncGroupFields(b);
-    this._syncAutoRefill(b);
-    this._fillParentSelect(b);
+    this._editing = b;
+    this._syncRefillMode(b);
+    this._fillGroupSelect(b);
     $('bucketForm').classList.remove('was-validated');
     this.modal.show();
   },
@@ -655,20 +828,31 @@ const Buckets = {
     // 0 is a meaningful factor (budget kept, never auto-refilled), and `|| 1.0`
     // would quietly turn it back into a full refill — only a blank field defaults.
     const factor = parseFloat($('bucketRefillFactor').value);
-    // A group is not offered these, so it sends neither: the server keeps what
-    // it has rather than taking a reading off a field that was never shown.
-    const isGroup = $('bucketFactorCol')?.classList.contains('d-none');
+    // An ad-hoc bucket hides the factor but still sends the stored value it was
+    // opened with, so switching back to scheduled restores it.
+    const choice = this._selectedChoice();
+    // A page served before this control existed (a long-running server holding
+    // the old template, or a cached tab) omits both fields, so the stored
+    // values stand rather than a reading taken off a control never shown.
+    const locked = !$('bucketRefillAuto');
     const payload = {
       name: $('bucketName').value.trim(),
-      budget: isGroup ? undefined : parseFloat($('bucketBudget').value) || 0,
-      refill_factor: isGroup ? undefined : (Number.isFinite(factor) ? factor : 1.0),
-      // Locked means the group decides — omit it so the bucket keeps its own
-      // stored preference for when the group is included again.
-      auto_refill: $('bucketAutoRefill').disabled
-        ? undefined : $('bucketAutoRefill').checked,
-      // Omitted entirely when the field is absent, so the server keeps
-      // whatever parent the bucket already has rather than clearing it.
-      parent_id: $('bucketParent') ? parseInt($('bucketParent').value) || null : undefined,
+      budget: parseFloat($('bucketBudget').value) || 0,
+      refill_factor: Number.isFinite(factor) ? factor : 1.0,
+      auto_refill: locked ? undefined : choice !== 'manual',
+      refill_mode: locked ? undefined : (choice === 'adhoc' ? 'adhoc' : 'scheduled'),
+      // Omitted entirely when the control is absent, so the server keeps
+      // whatever group the bucket already has rather than clearing it.
+      ...(() => {
+        const sel = $('bucketGroup');
+        if (!sel || sel.disabled) return {};
+        if (sel.value === '__new') {
+          const name = $('bucketNewGroup').value.trim();
+          // An empty name is not a group: fall back to leaving it where it is.
+          return name ? { new_group: name } : {};
+        }
+        return { group_id: parseInt(sel.value) || null };
+      })(),
       acct_id: State.accountId,
     };
     try {
@@ -676,11 +860,9 @@ const Buckets = {
         ? await api('PUT', `/api/buckets/${id}`, payload)
         : await api('POST', '/api/buckets', payload);
       toast(id ? 'Bucket updated' : 'Bucket created');
-      // The server moves a would-be group's own money into a "General"
-      // sub-bucket. Say so — it is a row the user did not ask for.
-      if (res?.converted) {
-        toast(`Moved ${res.converted.moved_tx} transaction(s) into "${res.converted.name}"`);
-      }
+      // Taking the last bucket out of a group leaves nothing for the group to
+      // name, so the server drops it. Say so — a heading vanished.
+      if (res?.group_pruned) toast('That group is now empty and was removed');
       this.modal.hide();
       await this.load();
       App.refreshBalances();
@@ -693,8 +875,6 @@ const Buckets = {
   async toggleAutoRefill(id) {
     const b = State.buckets.find(x => x.id === id);
     if (!b) return;
-    // Sub-buckets follow their group; there is no per-child switch to flip.
-    if (b.parent_id) return;
     try {
       await api('PUT', `/api/buckets/${id}`, {
         name: b.name,
@@ -703,29 +883,51 @@ const Buckets = {
         refill_factor: b.refill_factor ?? undefined,
         auto_refill: !b.auto_refill,
       });
-      const scope = b.is_parent ? ' and its sub-buckets' : '';
       toast(b.auto_refill
-        ? `"${b.name}"${scope} excluded from Refill All — manual refills only`
-        : `"${b.name}"${scope} included in Refill All`);
+        ? `"${b.name}" excluded from Refill All — manual refills only`
+        : `"${b.name}" included in Refill All`);
       await this.load();
+    } catch (e) { showError(e.message); }
+  },
+
+  // An ad-hoc bucket has no fixed amount to confirm, so the dialog asks for one
+  // and the refill goes out as a single hand-set line — the same payload the
+  // group refill screen already sends.
+  async _refillAdhoc(b) {
+    const settlement = State.buckets.find(x => x.is_settlement);
+    const available = settlement?.balance ?? 0;
+    const res = await confirm(
+      `Add money to "${b.name}" from Settlement.`,
+      'Refill', false, {
+        date: true,
+        amount: {
+          max: settlement ? available : null,
+          maxLabel: 'Settlement',
+          help: settlement ? `Settlement holds ${fmt(available)}.` : '',
+        },
+      });
+    if (!res) return;
+    try {
+      const out = await api('POST', `/api/buckets/${b.id}/refill`, {
+        tx_date: res.date,
+        amount: res.amount,
+      });
+      toast(`Refilled ${fmt(out.amount)} into "${b.name}"`);
+      await this.load();
+      App.refreshBalances();
     } catch (e) { showError(e.message); }
   },
 
   async refill(id) {
     const b = State.buckets.find(x => x.id === id);
-    // refill_amount already sums a group's children, so this one field covers
-    // both kinds of row.
+    if (b?.refill_mode === 'adhoc') { await this._refillAdhoc(b); return; }
     const amount = b?.refill_amount ?? ((b?.budget || 0) * (b?.refill_factor ?? 0));
     if (amount <= 0) {
-      showError(b?.is_parent
-        ? `"${b.name}" has nothing to refill — none of its sub-buckets has a budget.`
-        : `"${b?.name}" has nothing to refill — its refill factor is ${b?.refill_factor ?? 0}.`);
+      showError(`"${b?.name}" has nothing to refill — its refill factor is ${b?.refill_factor ?? 0}.`);
       return;
     }
     const txDate = await confirm(
-      b?.is_parent
-        ? `Transfer ${fmt(amount)} from Settlement into the ${b.child_count} sub-buckets of "${b.name}"?`
-        : `Transfer ${fmt(amount)} from Settlement to "${b?.name}"?`,
+      `Transfer ${fmt(amount)} from Settlement to "${b?.name}"?`,
       'Refill', false, { date: true });
     if (!txDate) return;
     try {
@@ -750,9 +952,7 @@ const Buckets = {
   async archive(id) {
     const b = State.buckets.find(x => x.id === id);
     const ok = await confirm(
-      b?.is_parent
-        ? `Archive "${b.name}" and its ${b.child_count} sub-bucket(s)? They will be hidden and frozen — no refills, transfers, or transactions.`
-        : `Archive bucket "${b?.name}"? It will be hidden and frozen — no refills, transfers, or transactions.`,
+      `Archive bucket "${b?.name}"? It will be hidden and frozen — no refills, transfers, or transactions.`,
       'Archive', false);
     if (!ok) return;
     try {
@@ -775,12 +975,10 @@ const Buckets = {
     } catch (e) { showError(e.message); }
   },
 
-  // The archived table is flat, so a sub-bucket names its group to stay
-  // distinguishable from a same-named one elsewhere.
+  // The archived table has no group headings, so a grouped bucket names its
+  // group to stay distinguishable from a same-named one elsewhere.
   _qualified(b) {
-    const parent = b.parent_id && State.archivedBuckets.concat(State.buckets)
-      .find(x => x.id === b.parent_id);
-    return parent ? `${parent.name} \u203a ${b.name}` : b.name;
+    return b.group_name ? `${b.group_name} \u203a ${b.name}` : b.name;
   },
 
   renderArchived() {
@@ -855,12 +1053,14 @@ const Buckets = {
 
   async refillAll() {
     if (!State.accountId) { showError('Please select an account first.'); return; }
-    // auto_refill already carries the group's answer for a sub-bucket.
+    // Both kinds of hand-refilled bucket are skipped, so both are counted —
+    // reporting only the manual ones would undercount.
     const skipped = State.buckets.filter(b =>
-      !b.is_settlement && !b.is_parent && !b.auto_refill &&
-      b.budget > 0 && b.refill_factor > 0).length;
+      !b.is_settlement &&
+      (b.refill_mode === 'adhoc' ||
+        (!b.auto_refill && b.budget > 0 && b.refill_factor > 0))).length;
     const msg = 'Transfer from Settlement into all buckets based on their budget and refill factor?'
-      + (skipped ? ` ${skipped} manual-only bucket(s) will be skipped.` : '');
+      + (skipped ? ` ${skipped} hand-refilled bucket(s) will be skipped.` : '');
     const txDate = await confirm(msg, 'Refill All', false, { date: true });
     if (!txDate) return;
     try {
@@ -1212,6 +1412,21 @@ const BucketDetail = {
     const withdrawals = data.transactions
       .reduce((sum, t) => t.amount < 0 ? sum - t.amount : sum, 0);
 
+    // An ad-hoc bucket has no budget driving it, so "Budget: $0.00" would read
+    // as a bucket budgeted to nothing. The useful question about one is when it
+    // was last topped up, and the ledger already on screen answers it.
+    const adhoc = b.refill_mode === 'adhoc';
+    const lastRefill = adhoc
+      ? [...data.transactions].reverse().find(t => t.amount > 0)
+      : null;
+    const budgetTile = adhoc && !b.budget
+      ? { tint: 'purple', icon: 'bi-clock-history', label: 'Last Refill',
+          value: lastRefill ? fmt(lastRefill.amount) : '—',
+          sub: lastRefill ? lastRefill.tx_date : 'Never refilled' }
+      : { tint: 'purple', icon: 'bi-cash-stack',
+          label: adhoc ? 'Target' : 'Budget', value: fmt(b.budget),
+          sub: adhoc ? `${fmt(b.balance)} of ${fmt(b.budget)}` : '' };
+
     $('bucketDetailStats').innerHTML = `
       <div class="col-sm-6 col-xl-3">
         <div class="stat-card stat-card--blue">
@@ -1223,11 +1438,13 @@ const BucketDetail = {
         </div>
       </div>
       <div class="col-sm-6 col-xl-3">
-        <div class="stat-card stat-card--purple">
-          <div class="stat-icon"><i class="bi bi-cash-stack"></i></div>
+        <div class="stat-card stat-card--${budgetTile.tint}">
+          <div class="stat-icon"><i class="bi ${budgetTile.icon}"></i></div>
           <div class="stat-body">
-            <div class="stat-label">Budget</div>
-            <div class="stat-value">${fmt(b.budget)}</div>
+            <div class="stat-label">${budgetTile.label}</div>
+            <div class="stat-value">${budgetTile.value}</div>
+            ${budgetTile.sub
+              ? `<div class="stat-sub">${esc(budgetTile.sub)}</div>` : ''}
           </div>
         </div>
       </div>
@@ -2257,15 +2474,19 @@ const Intro = {
   video: null,
 
   init() {
-    this.modal = new bootstrap.Modal($('introModal'));
+    // The tour is optional: with no recording installed the server leaves the
+    // modal and both buttons out of the page, so there is nothing to wire up.
+    const el = $('introModal');
     this.video = $('introVideo');
+    if (!el || !this.video) return;
+    this.modal = new bootstrap.Modal(el);
 
     [$('btnWatchIntro'), $('btnWatchIntroSidebar')].forEach(btn => {
       if (btn) btn.addEventListener('click', () => this.open());
     });
 
     // Stop playback (and the download) when the modal is dismissed.
-    $('introModal').addEventListener('hidden.bs.modal', () => {
+    el.addEventListener('hidden.bs.modal', () => {
       this.video.pause();
     });
 
@@ -2281,6 +2502,7 @@ const Intro = {
   },
 
   open() {
+    if (!this.modal) return;
     // Assigning src lazily keeps the video off the wire until it's wanted.
     if (!this.video.src) this.video.src = '/media/intro.mp4';
     this.modal.show();
@@ -2469,7 +2691,7 @@ const Receipt = {
 
   open() {
     if (!State.accountId) { showError('Pick an account first.'); return; }
-    if (!State.buckets.filter(b => !b.is_settlement && !b.is_parent).length) {
+    if (!State.buckets.filter(b => !b.is_settlement).length) {
       showError('Add a spending bucket to this account first.');
       return;
     }

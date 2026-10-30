@@ -5,7 +5,7 @@ A self-hosted envelope-budgeting web app. Money lives in **accounts**, accounts 
 ![Buckets dashboard](docs/images/dashboard.png)
 
 <p align="center">
-  <img src="docs/images/buckets.png" width="49%" alt="Bucket list with budgets, balances, and refill factors"/>
+  <img src="docs/images/buckets.png" width="49%" alt="Bucket list with a group heading, budgets, balances and refill factors"/>
   <img src="docs/images/bucket-detail.png" width="49%" alt="A single bucket's transactions and totals"/>
 </p>
 
@@ -19,9 +19,9 @@ Access is invite-only: there's no signup page, and you create each account yours
 
 - **Dashboard** — every account's balance as a tile grid with the combined total, so signing in lands on the numbers. A tile opens that account's buckets.
 - **Accounts & buckets** — organize money into accounts, split each into budget envelopes with per-bucket budgets and refill amounts.
-- **Sub-buckets** — group related buckets under a parent (Auto → Gas, Insurance, Repairs). The group is a roll-up: the sub-buckets hold the money and the parent row shows their combined budget, balance and refill. Refilling a group refills every sub-bucket under it.
+- **Bucket groups** — keep related buckets together under a heading (Auto → Gas, Insurance, Repairs). A group is only a name: every bucket in it still holds its own money and owns its own budget and refill settings, and the group just lists them together with a collapsible header. Add a bucket to a group or take it out at any time; removing a group ungroups its buckets without touching a cent.
 - **Transactions** — record income/spending against a bucket, post/unpost, soft-delete with restore, or purge permanently.
-- **Refills** — refill a single bucket or all buckets at once from the account's Settlement pool; reset a bucket's balance. A bucket can be excluded from Refill All, keeping its budget and refill factor but only ever topping up by hand.
+- **Refills** — refill a single bucket or all buckets at once from the account's Settlement pool; reset a bucket's balance. Each bucket picks how it is funded: on a schedule (budget × refill factor, every Refill All), on a schedule but by hand only, or **ad hoc** — no fixed amount at all, skipped by Refill All, with the amount typed each time you top it up. An ad-hoc bucket's budget is just a target to aim at, so irregular money (bonuses, gifts, reimbursements) doesn't have to pretend to be a monthly figure.
 - **Transfers** — move money between buckets or between accounts.
 - **Upcoming expenses** — track bills/expenses you know are coming so they factor into your budget before they hit.
 - **IOUs** — request/settle money owed between users, and link an IOU to a real transaction once it's paid.

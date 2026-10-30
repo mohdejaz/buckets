@@ -249,6 +249,10 @@ body {
 .stat-icon { font-size: 2rem; width: 52px; height: 52px; border-radius: 12px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
 .stat-label { font-size: .75rem; font-weight: 600; text-transform: uppercase; letter-spacing: .05em; opacity: .75; }
 .stat-value { font-size: 1.5rem; font-weight: 700; margin-top: .15rem; }
+/* A line of context under the value — the date an ad-hoc bucket was last
+   refilled, or progress toward a target. Inherits the card's colour, since
+   text-muted grey reads as a different element against the tint. */
+.stat-sub { font-size: .75rem; font-weight: 600; opacity: .7; margin-top: .1rem; }
 
 .stat-card--blue   { background: #eff6ff; color: #1d4ed8; }
 .stat-card--blue   .stat-icon { background: #bfdbfe; }
@@ -459,6 +463,11 @@ tr.bucket-overdrawn > td { background: var(--negative-bg); }
    cell — the column it is about — and the whole cell is the toggle, so the
    setting needs no icon of its own in the Actions column. */
 .badge-manual { background: var(--neutral-bg); color: #64748b; font-size: .68rem; font-weight: 700; padding: .15em .5em; border-radius: 20px; margin-left: .4rem; white-space: nowrap; }
+/* "Ad hoc" marks a bucket with no fixed refill amount at all: Refill All
+   always skips it, and the amount is typed each time. Same pill as "Manual",
+   tinted differently because it is a different claim — Manual still has an
+   amount waiting, Ad hoc has none. */
+.badge-adhoc { background: #ede9fe; color: #6d47d9; font-size: .68rem; font-weight: 700; padding: .15em .5em; border-radius: 20px; margin-left: .4rem; white-space: nowrap; }
 .refill-mode {
   background: none; border: 0; padding: .1rem .25rem; border-radius: var(--radius-sm);
   color: inherit; cursor: pointer; white-space: nowrap;
@@ -466,25 +475,37 @@ tr.bucket-overdrawn > td { background: var(--negative-bg); }
 .refill-mode:hover { background: var(--neutral-bg); }
 .refill-mode .text-decoration-line-through { color: #94a3b8; }
 
-/* A group row is a total, not a bucket: tinted so the eye reads it as a header,
-   and its children sit indented beneath it with a tick instead of a number. */
-.bucket-group > td { background: var(--neutral-bg); }
+/* A group header is a label, not a row of figures: it spans the number columns
+   because a group stores nothing to put in them, and is tinted so the eye reads
+   it as a heading for the buckets beneath. */
+.bucket-group-row > td { background: var(--neutral-bg); }
 .bucket-group-toggle {
   background: none; border: 0; padding: 0; color: inherit; cursor: pointer;
   display: inline-flex; align-items: center; gap: .4rem;
 }
 .bucket-group-toggle .bi { font-size: .75rem; color: #64748b; }
-.bucket-group-toggle:hover strong { text-decoration: underline; }
+.bucket-group-toggle:hover .bucket-group-name { text-decoration: underline; }
+.bucket-group-name {
+  font-weight: 700; font-size: .78rem; text-transform: uppercase;
+  letter-spacing: .04em; color: #475569;
+}
 .badge-group {
   background: #e2e8f0; color: #475569; font-size: .68rem; font-weight: 700;
   padding: .05em .45em; border-radius: 20px;
 }
-/* A sub-bucket's refill cell reports what its group decided — same shape as
-   the control above it, but plainly not clickable. */
+/* An ad-hoc bucket's refill cell reports its mode — same shape as the toggle
+   on the rows around it, but plainly not clickable. */
 .refill-mode-static { display: inline-block; padding: .1rem .25rem; cursor: default; }
 .refill-mode-static .text-decoration-line-through { color: #94a3b8; }
-.bucket-child td:nth-child(2) { padding-left: 2rem; }
-.bucket-child-tick { color: #94a3b8; margin-right: .35rem; }
+
+/* A bucket in a group is indented under its heading and carries a tick, so it
+   still reads as grouped once the heading has scrolled away. The left border
+   is the thing that survives: it runs down the whole run of member rows. */
+.bucket-grouped td:nth-child(2) { padding-left: 1.6rem; }
+.bucket-grouped td:first-child {
+  box-shadow: inset 3px 0 0 0 #cbd5e1;
+}
+.bucket-group-tick { color: #94a3b8; margin-right: .35rem; }
 
 /* Posted state is an icon alone — the column header already says "Posted", so
    the word on every row was redundant. title/aria-label carry the meaning for
@@ -684,3 +705,14 @@ a { text-decoration: none; }
   margin: 0;
 }
 #receiptLines td { padding-left: .35rem; padding-right: .35rem; }
+
+/* The bucket modal's refill choice: three options with a line of explanation
+   each, boxed so the group reads as one control the way the switch it replaced
+   did. */
+.refill-choice {
+  border: 1px solid var(--border); border-radius: var(--radius-sm);
+  padding: .6rem .75rem;
+}
+.refill-choice .form-check + .form-check { margin-top: .5rem; }
+.refill-choice .form-check-label { cursor: pointer; }
+.refill-choice .form-text { font-size: .78rem; }
