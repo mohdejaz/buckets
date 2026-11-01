@@ -455,6 +455,11 @@ body {
 .balance-pos, td.balance-pos { color: var(--positive) !important; font-weight: 600; }
 .balance-neg, td.balance-neg { color: var(--negative) !important; font-weight: 600; }
 
+/* Current balance shown beside a bucket/account picker in a dialog */
+.balance-row { display: flex; justify-content: space-between; align-items: baseline; gap: .5rem; margin-bottom: .35rem; }
+.balance-hint { font-size: .8rem; font-family: var(--bs-font-monospace, monospace); color: #64748b; white-space: nowrap; }
+.balance-hint .balance-arrow { color: #94a3b8; padding: 0 .1rem; }
+
 /* Overdrawn bucket row highlight */
 tr.bucket-overdrawn > td { background: var(--negative-bg); }
 .badge-overdraft { background: var(--negative-bg); color: var(--negative); font-size: .68rem; font-weight: 700; padding: .15em .5em; border-radius: 20px; margin-left: .4rem; white-space: nowrap; }
