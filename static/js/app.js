@@ -14,6 +14,26 @@ const fmt = (n, forceSign = false) => {
 };
 const amtClass = v => v > 0 ? 'amount-pos' : v < 0 ? 'amount-neg' : 'amount-zero';
 const balClass = v => v > 0 ? 'balance-pos' : v < 0 ? 'balance-neg' : '';
+// Current balance of whatever a dialog's bucket/account picker points at, so
+// the amount can be judged without closing the dialog. Null hides the line.
+// `projected` is where that balance lands once the typed amount applies; it is
+// only drawn once it differs, so an untouched dialog stays quiet.
+const showBalanceHint = (id, balance, projected = null) => {
+  const el = $(id);
+  if (!el) return;
+  if (balance === null || balance === undefined) {
+    el.className = 'balance-hint d-none';
+    el.textContent = '';
+    return;
+  }
+  el.className = 'balance-hint';
+  let html = `Balance <span class="${balClass(balance)}">${fmt(balance)}</span>`;
+  if (projected !== null && Math.abs(projected - balance) >= 0.005) {
+    html += ` <span class="balance-arrow">&rarr;</span>`
+          + ` <span class="${balClass(projected)}">${fmt(projected)}</span>`;
+  }
+  el.innerHTML = html;
+};
 const today = () => new Date().toISOString().slice(0, 10);
 
 async function api(method, url, body) {
@@ -194,6 +214,9 @@ const Accounts = {
     $('btnSaveAccount').addEventListener('click', () => this.save());
     $('btnAccountTransfer').addEventListener('click', () => this.openTransfer());
     $('btnSaveAccountTransfer').addEventListener('click', () => this.saveTransfer());
+    ['acctTransferFrom', 'acctTransferTo'].forEach(id =>
+      $(id).addEventListener('change', () => this._showTransferBalances()));
+    $('acctTransferAmount').addEventListener('input', () => this._showTransferBalances());
   },
 
   // Accounts are shown as dashboard tiles; this just keeps State and the
@@ -229,7 +252,22 @@ const Accounts = {
     $('acctTransferNote').value = '';
     $('acctTransferDate').value = new Date().toLocaleDateString('en-CA');
     $('accountTransferForm').classList.remove('was-validated');
+    this._showTransferBalances();
     this.transferModal.show();
+  },
+
+  // Both ends are shown: the source says what is available to send, the
+  // destination what it is being added to. Once an amount is typed each side
+  // also shows where it lands, so an overdraft is visible before saving.
+  _showTransferBalances() {
+    const bal = id => State.accounts.find(a => a.id === parseInt($(id).value))?.balance;
+    const from = bal('acctTransferFrom'), to = bal('acctTransferTo');
+    const amt = parseFloat($('acctTransferAmount').value);
+    const n = isNaN(amt) || amt <= 0 ? null : amt;
+    showBalanceHint('acctTransferFromBalance', from ?? null,
+      from === undefined || n === null ? null : from - n);
+    showBalanceHint('acctTransferToBalance', to ?? null,
+      to === undefined || n === null ? null : to + n);
   },
 
   async saveTransfer() {
@@ -333,6 +371,9 @@ const Buckets = {
     $('btnSaveBucket').addEventListener('click', () => this.save());
     $('btnTransfer').addEventListener('click', () => this.openTransfer());
     $('btnSaveTransfer').addEventListener('click', () => this.saveTransfer());
+    ['transferFrom', 'transferTo'].forEach(id =>
+      $(id).addEventListener('change', () => this._showTransferBalances()));
+    $('transferAmount').addEventListener('input', () => this._showTransferBalances());
     $('btnRefillAll').addEventListener('click', () => this.refillAll());
     $('btnResetBuckets').addEventListener('click', () => this.resetAll());
     $('btnDepositSettlement').addEventListener('click', () => {
@@ -1019,7 +1060,22 @@ const Buckets = {
       $('transferFrom').disabled = false;
     }
     if (toId) $('transferTo').value = toId;
+    this._showTransferBalances();
     this.transferModal.show();
+  },
+
+  // Both ends are shown: the source says what is available to move, the
+  // destination what it is being topped up from. Once an amount is typed each
+  // side also shows where it lands, so an overdraft is visible before saving.
+  _showTransferBalances() {
+    const bal = id => State.buckets.find(b => b.id === parseInt($(id).value))?.balance;
+    const from = bal('transferFrom'), to = bal('transferTo');
+    const amt = parseFloat($('transferAmount').value);
+    const n = isNaN(amt) || amt <= 0 ? null : amt;
+    showBalanceHint('transferFromBalance', from ?? null,
+      from === undefined || n === null ? null : from - n);
+    showBalanceHint('transferToBalance', to ?? null,
+      to === undefined || n === null ? null : to + n);
   },
 
   async saveTransfer() {
@@ -1091,6 +1147,19 @@ const Transactions = {
 
   _mode: null,
 
+  // The amount already on an edited transaction is part of the bucket's
+  // balance, so it comes back out before the typed one goes in — otherwise
+  // editing a -25 to -30 would read as -55.
+  _editAmount: 0,
+
+  _showBucketBalance() {
+    const b = State.buckets.find(x => x.id === parseInt($('txBucket').value));
+    if (!b) { showBalanceHint('txBucketBalance', null); return; }
+    const amt = parseFloat($('txAmount').value);
+    showBalanceHint('txBucketBalance', b.balance,
+      isNaN(amt) ? null : b.balance - this._editAmount + amt);
+  },
+
   _applyAmountConstraint(bucketId, isTransfer = false) {
     const inp = $('txAmount');
     const hint = $('txAmountHint');
@@ -1116,9 +1185,10 @@ const Transactions = {
     $('btnExportTx').addEventListener('click', () => this.exportCsv());
     $('btnPostAllTx').addEventListener('click', () => this.postAll());
     $('txBucket').addEventListener('change', () => {
-      const bid = parseInt($('txBucket').value);
-      this._applyAmountConstraint(bid);
+      this._applyAmountConstraint(parseInt($('txBucket').value));
+      this._showBucketBalance();
     });
+    $('txAmount').addEventListener('input', () => this._showBucketBalance());
   },
 
   _PAGE: 20,
@@ -1258,7 +1328,9 @@ const Transactions = {
     } else {
       $('txBucket').disabled = false;
     }
+    this._editAmount = 0;
     this._applyAmountConstraint(bucketId ? parseInt(bucketId) : null);
+    this._showBucketBalance();
     this.modal.show();
   },
 
@@ -1279,7 +1351,9 @@ const Transactions = {
         Buckets.populateBucketSelects();
         $('txBucket').value = t.bucket_id;
         $('txBucket').disabled = false;
+        this._editAmount = t.amount;
         this._applyAmountConstraint(t.bucket_id, !!t.linked_tx_id);
+        this._showBucketBalance();
         this.modal.show();
       });
   },

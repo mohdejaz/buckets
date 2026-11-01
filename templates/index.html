@@ -720,11 +720,17 @@
       <div class="modal-body">
         <form id="transferForm" novalidate>
           <div class="mb-3">
-            <label class="form-label fw-semibold">From Bucket <span class="text-danger">*</span></label>
+            <div class="balance-row">
+              <label class="form-label fw-semibold mb-0" for="transferFrom">From Bucket <span class="text-danger">*</span></label>
+              <span class="balance-hint d-none" id="transferFromBalance"></span>
+            </div>
             <select class="form-select" id="transferFrom" required></select>
           </div>
           <div class="mb-3">
-            <label class="form-label fw-semibold">To Bucket <span class="text-danger">*</span></label>
+            <div class="balance-row">
+              <label class="form-label fw-semibold mb-0" for="transferTo">To Bucket <span class="text-danger">*</span></label>
+              <span class="balance-hint d-none" id="transferToBalance"></span>
+            </div>
             <select class="form-select" id="transferTo" required></select>
           </div>
           <div class="mb-3">
@@ -766,11 +772,17 @@
         <p class="small text-muted">Funds move from the source account's Settlement bucket into the destination account's Settlement bucket.</p>
         <form id="accountTransferForm" novalidate>
           <div class="mb-3">
-            <label class="form-label fw-semibold">From Account <span class="text-danger">*</span></label>
+            <div class="balance-row">
+              <label class="form-label fw-semibold mb-0" for="acctTransferFrom">From Account <span class="text-danger">*</span></label>
+              <span class="balance-hint d-none" id="acctTransferFromBalance"></span>
+            </div>
             <select class="form-select" id="acctTransferFrom" required></select>
           </div>
           <div class="mb-3">
-            <label class="form-label fw-semibold">To Account <span class="text-danger">*</span></label>
+            <div class="balance-row">
+              <label class="form-label fw-semibold mb-0" for="acctTransferTo">To Account <span class="text-danger">*</span></label>
+              <span class="balance-hint d-none" id="acctTransferToBalance"></span>
+            </div>
             <select class="form-select" id="acctTransferTo" required></select>
           </div>
           <div class="mb-3">
@@ -920,7 +932,10 @@
             <input type="date" class="form-control" id="txDate" required/>
           </div>
           <div class="mb-3">
-            <label class="form-label fw-semibold">Bucket <span class="text-danger">*</span></label>
+            <div class="balance-row">
+              <label class="form-label fw-semibold mb-0" for="txBucket">Bucket <span class="text-danger">*</span></label>
+              <span class="balance-hint d-none" id="txBucketBalance"></span>
+            </div>
             <select class="form-select" id="txBucket" required>
               <option value="">— Select bucket —</option>
             </select>
