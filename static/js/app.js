@@ -1460,12 +1460,28 @@ const Transactions = {
         toast('Transaction added');
       }
       this.modal.hide();
-      // This save may have invented a tag, or let go of the last transaction
-      // holding one, so the dropdown's list is refreshed either way.
-      await Tags.load();
-      await this.load();
-      if (State.currentSection === 'buckets' || State.currentSection === 'transactions') await Buckets.load();
-      if (State.currentSection === 'bucket-detail') await BucketDetail.load(State.currentBucketId);
+      // Each of these refetches reads its own endpoint and none reads what
+      // another writes: the ledger renders the tag name the API hands back,
+      // while State.tags and State.buckets are only read when a modal next
+      // opens. So they go out together rather than in a chain — four serial
+      // round trips became one, which is the difference between a save feeling
+      // instant and feeling slow on a high-latency link.
+      //
+      // this.load() is called unchanged, so the user's "More" expansion and
+      // filter survive the save; only the controls themselves reset paging.
+      const onBucketList = State.currentSection === 'buckets'
+                        || State.currentSection === 'transactions';
+      await Promise.all([
+        this.load(),
+        // This save may have invented a tag, or let go of the last transaction
+        // holding one, so the dropdown's list is refreshed either way.
+        // Buckets.load() already refreshes it as part of its own fan-out, so
+        // asking for it again here would just fetch /api/tags twice.
+        onBucketList ? Buckets.load() : Tags.load(),
+        State.currentSection === 'bucket-detail'
+          ? BucketDetail.load(State.currentBucketId)
+          : null,
+      ]);
       App.refreshBalances();
     } catch (e) { showError(e.message); }
   },

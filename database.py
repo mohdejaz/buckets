@@ -39,6 +39,13 @@ def get_db():
     # that collides with another writer fails instantly with "database is
     # locked"; this waits its turn instead.
     conn.execute("PRAGMA busy_timeout = 5000")
+    # `synchronous` is per-connection, so unlike journal_mode it cannot be set
+    # once in init_db. It is deliberately left at SQLite's FULL default: every
+    # commit is fsynced, which is what keeps a save that was acknowledged from
+    # being lost to a power cut. NORMAL would skip most of those fsyncs and is
+    # safe against corruption under WAL, but can drop the most recent commits,
+    # so it is not worth trading for writes that already take under a
+    # millisecond.
     return conn
 
 
@@ -60,6 +67,13 @@ def init_db(seed=True):
     """
     conn = get_db()
     cur = conn.cursor()
+
+    # Write-ahead logging, set here because it is a property of the database
+    # file and not of a connection — once switched, every later connection
+    # opens in WAL mode without having to ask. The rollback journal it replaces
+    # made readers and writers block each other, so a single save held up the
+    # reads that the page fires right after it. Under WAL they run together.
+    cur.execute("PRAGMA journal_mode = WAL")
 
     # Temporarily disable FK enforcement so we can migrate freely
     cur.execute("PRAGMA foreign_keys = OFF")
@@ -394,6 +408,27 @@ def init_db(seed=True):
         END;
     """)
 
+    conn.commit()
+
+    # ── Indexes for the hot read paths ───────────────────────────────────────
+    # Created unconditionally rather than inside a column migration, so a
+    # database that pre-dates them picks them up on the next start.
+    #
+    # Every balance, refill-MTD and opening-balance figure sums one bucket's
+    # own live transactions, and the buckets page asks for all three per
+    # bucket. Without an index each of those is a full table scan. The column
+    # order follows how they filter — bucket first, then the deleted flag, then
+    # the date range — and carrying `amount` as the last column makes the index
+    # covering, so the sums never touch the table at all.
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_transactions_bucket"
+        " ON transactions(bucket_id, deleted, tx_date, amount)"
+    )
+    # The ledger reaches transactions through the account's buckets, so this
+    # join runs on every transactions page load.
+    cur.execute(
+        "CREATE INDEX IF NOT EXISTS idx_buckets_acct ON buckets(acct_id)"
+    )
     conn.commit()
 
     if not seed:

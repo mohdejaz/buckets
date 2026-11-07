@@ -3,6 +3,11 @@
 .envrc
 buckets.db
 buckets.db-journal
+# Under WAL the most recent commits live in these sidecars rather than in the
+# database file, so they carry real financial data and must be excluded on the
+# same grounds as buckets.db itself.
+buckets.db-wal
+buckets.db-shm
 # Hand-made backups taken before a migration. .gitignore already keeps these
 # out of the repo; without the same rule here, COPY . . would bake a full copy
 # of the real database into a published image.
