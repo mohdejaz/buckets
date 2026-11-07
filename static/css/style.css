@@ -512,27 +512,16 @@ tr.bucket-overdrawn > td { background: var(--negative-bg); }
 }
 .bucket-group-tick { color: #94a3b8; margin-right: .35rem; }
 
-/* A tag is the one label a transaction carries. The chip sits in the Tag
-   column and is itself the filter control, so marking a transaction and then
-   finding it again need no extra icon in the Actions column. */
+/* The one label a transaction carries, read in its own column and carried
+   into the CSV export. A plain label, not a control. */
 .tag-chip {
+  display: inline-block;
   background: var(--primary-light); color: var(--primary-dark);
   border: 1px solid #c4b5fd; border-radius: 20px;
   font-size: .72rem; font-weight: 600; padding: .1em .6em;
   max-width: 11rem; overflow: hidden; text-overflow: ellipsis;
-  white-space: nowrap; cursor: pointer;
+  white-space: nowrap; vertical-align: middle;
 }
-.tag-chip:hover,
-.tag-chip.active { background: var(--primary); color: #fff; border-color: var(--primary); }
-.tag-chip.active { cursor: default; }
-
-/* The filter row above a ledger. It narrows which rows are listed and nothing
-   else, so it sits outside the table rather than in its header, and carries a
-   note saying the figures beside it still count everything. */
-.filter-bar { display: flex; align-items: center; gap: .5rem; flex-wrap: wrap; margin-bottom: .6rem; }
-.filter-bar .form-select { width: auto; max-width: 15rem; }
-.filter-label { font-size: .8rem; font-weight: 600; color: #475569; white-space: nowrap; }
-.filter-note { font-size: .78rem; color: #64748b; }
 
 /* Posted state is an icon alone — the column header already says "Posted", so
    the word on every row was redundant. title/aria-label carry the meaning for
