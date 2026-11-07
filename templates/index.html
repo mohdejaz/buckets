@@ -360,7 +360,7 @@
           <button class="btn btn-outline-secondary btn-sm d-none" id="btnPostAllTx" title="Post all pending transactions">
             <i class="bi bi-check2-all"></i><span class="d-none d-sm-inline ms-1">Post All</span>
           </button>
-          <button class="btn btn-outline-success btn-sm" id="btnExportTx" title="Export to CSV">
+          <button class="btn btn-outline-success btn-sm" id="btnExportTx" title="Export these transactions to CSV">
             <i class="bi bi-download"></i><span class="d-none d-sm-inline ms-1">Export CSV</span>
           </button>
         </div>
@@ -372,6 +372,26 @@
         <p class="text-muted">Select an account to view transactions.</p>
       </div>
 
+      <!-- Filtering picks which rows are listed and nothing else: the note
+           beside it says so, because the balances in the table still count
+           every transaction in the account, tagged or not. -->
+      <div class="filter-bar d-none" id="txFilterBar">
+        <label class="filter-label mb-0" for="txTagFilter">
+          <i class="bi bi-tag me-1"></i>Tag
+        </label>
+        <select class="form-select form-select-sm" id="txTagFilter">
+          <option value="">All tags</option>
+        </select>
+        <button class="action-btn action-btn-edit d-none" id="btnRenameTag"
+                title="Rename this tag"><i class="bi bi-pencil"></i></button>
+        <div class="input-group input-group-sm d-none" id="txRenameTagWrap">
+          <input type="text" class="form-control" id="txRenameTag" maxlength="50"/>
+          <button class="btn btn-primary" id="btnRenameTagSave">Rename</button>
+          <button class="btn btn-outline-secondary" id="btnRenameTagCancel">Cancel</button>
+        </div>
+        <span class="filter-note d-none" id="txFilterNote"></span>
+      </div>
+
       <div class="card shadow-sm" id="txCard">
         <div class="card-body p-0">
           <table class="table table-hover mb-0">
@@ -380,6 +400,7 @@
                 <th>Date</th>
                 <th>Bucket</th>
                 <th>Note</th>
+                <th class="d-none d-md-table-cell">Tag</th>
                 <th class="text-end">Amount</th>
                 <th class="text-end">Balance</th>
                 <th class="text-center">Posted</th>
@@ -421,10 +442,27 @@
           <button class="btn btn-outline-primary btn-sm d-none" id="btnBucketDetailTransfer">
             <i class="bi bi-arrow-left-right me-1"></i>Transfer
           </button>
+          <button class="btn btn-outline-success btn-sm" id="btnBucketDetailExport"
+                  title="Export these transactions to CSV">
+            <i class="bi bi-download"></i><span class="d-none d-sm-inline ms-1">Export CSV</span>
+          </button>
         </div>
       </div>
 
       <div class="row g-3 mb-4" id="bucketDetailStats"></div>
+
+      <!-- Only offered once something in this bucket is tagged. The stats
+           above and the balance column below are the bucket's own money and
+           go on counting every transaction, filter or no filter. -->
+      <div class="filter-bar d-none" id="bdFilterBar">
+        <label class="filter-label mb-0" for="bdTagFilter">
+          <i class="bi bi-tag me-1"></i>Tag
+        </label>
+        <select class="form-select form-select-sm" id="bdTagFilter">
+          <option value="">All tags</option>
+        </select>
+        <span class="filter-note d-none" id="bdFilterNote"></span>
+      </div>
 
       <div class="card shadow-sm">
         <div class="card-body p-0">
@@ -433,6 +471,7 @@
               <tr>
                 <th>Date</th>
                 <th>Note</th>
+                <th class="d-none d-md-table-cell">Tag</th>
                 <th class="text-end">Amount</th>
                 <th class="text-end">Balance</th>
                 <th class="text-center">Posted</th>
@@ -952,6 +991,25 @@
           <div class="mb-3">
             <label class="form-label fw-semibold">Note</label>
             <input type="text" class="form-control" id="txNote" placeholder="Description…"/>
+          </div>
+          <div class="mb-3">
+            <label class="form-label fw-semibold" for="txTag">Tag</label>
+            <select class="form-select" id="txTag"
+                    onchange="Transactions._syncNewTag()">
+              <option value="">— None —</option>
+            </select>
+            <!-- Swapped in by "+ New tag…": a tag is only a name, so creating
+                 one and applying it is a single field and one save. -->
+            <div class="input-group d-none" id="txNewTagWrap">
+              <input type="text" class="form-control" id="txNewTag"
+                     maxlength="50" placeholder="New tag name"/>
+              <button type="button" class="btn btn-outline-secondary"
+                      onclick="Transactions.cancelNewTag()">Cancel</button>
+            </div>
+            <div class="form-text">
+              One tag per transaction, to filter a ledger by. A tag moves no
+              money and changes no balance.
+            </div>
           </div>
         </form>
       </div>
