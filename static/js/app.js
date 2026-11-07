@@ -1694,9 +1694,13 @@ const BucketDetail = {
   },
 
   open(bucketId) {
-    // A filter belongs to the ledger it was set on, so opening a different
-    // bucket starts from the whole of that bucket's history.
-    if (bucketId !== State.currentBucketId) this._tag = '';
+    // A filter and a "More" expansion both belong to the ledger they were
+    // made on, so opening a different bucket starts from the top of its own
+    // whole history.
+    if (bucketId !== State.currentBucketId) {
+      this._tag = '';
+      this._shown = 0;
+    }
     State.currentBucketId = bucketId;
     App.nav('bucket-detail');
   },
@@ -1788,9 +1792,14 @@ const BucketDetail = {
         </div>
       </div>`;
 
+    // How far "More" had got before this reload. A save, a post or a delete
+    // refetches the whole ledger, and folding it back to the first page would
+    // throw away a choice the user made — the row they just edited is often
+    // one they had expanded the list to reach.
+    const reveal = this._shown;
     this._allRows = [...data.transactions].reverse();
     this.syncTagFilter();
-    this._renderRows();
+    this._renderRows(reveal);
   },
 
   syncTagFilter() {
@@ -1845,7 +1854,10 @@ const BucketDetail = {
     return this._allRows.filter(t => String(t.tag_id) === this._tag);
   },
 
-  _renderRows() {
+  // `reveal` is how many rows to put back on screen. It defaults to one page,
+  // which is what a deliberate change of filter wants; a reload passes what
+  // was already showing.
+  _renderRows(reveal = this._PAGE) {
     const body = $('bucketDetailBody');
     this._shown = 0;
     body.innerHTML = '';
@@ -1862,13 +1874,13 @@ const BucketDetail = {
       return;
     }
 
-    this._appendRows();
+    this._appendRows(Math.max(this._PAGE, reveal));
   },
 
-  _appendRows() {
+  _appendRows(count = this._PAGE) {
     const body = $('bucketDetailBody');
     const rows = this._filtered();
-    const next = rows.slice(this._shown, this._shown + this._PAGE);
+    const next = rows.slice(this._shown, this._shown + count);
     this._shown += next.length;
 
     body.insertAdjacentHTML('beforeend', next.map(t => {
