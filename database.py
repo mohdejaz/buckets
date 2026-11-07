@@ -98,6 +98,16 @@ def init_db(seed=True):
             FOREIGN KEY (acct_id) REFERENCES accounts(id)
         );
 
+        CREATE TABLE IF NOT EXISTS tags (
+            id      INTEGER PRIMARY KEY AUTOINCREMENT,
+            name    TEXT NOT NULL,
+            user_id INTEGER NOT NULL,
+            FOREIGN KEY (user_id) REFERENCES users(id)
+        );
+
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_user_name
+            ON tags(user_id, name COLLATE NOCASE);
+
         CREATE TABLE IF NOT EXISTS transactions (
             id        INTEGER PRIMARY KEY AUTOINCREMENT,
             tx_date   TEXT NOT NULL,
@@ -300,6 +310,30 @@ def init_db(seed=True):
         cur.execute(
             "CREATE INDEX IF NOT EXISTS idx_transactions_receipt"
             " ON transactions(receipt_id)"
+        )
+        conn.commit()
+
+    # ── Schema migration: add tag_id to transactions ─────────────────────
+    # One tag per transaction, so this is a column and not a join table: a
+    # transaction is either marked or it is not, and the ledger never has to ask
+    # which of several labels to show. NULL = untagged.
+    #
+    # A tag is a label, like a bucket group: it decides which rows a filtered
+    # view lists and nothing else. No balance, budget or refill reads it, so
+    # tagging and untagging move no money.
+    #
+    # Tags hang off the user rather than an account, because the things people
+    # want to find again — a holiday, a house move, a tax year — cut across
+    # accounts and buckets. ON DELETE SET NULL so removing a tag untags its
+    # transactions instead of taking them with it.
+    if 'tag_id' not in tx_cols:
+        cur.execute(
+            "ALTER TABLE transactions ADD COLUMN tag_id INTEGER"
+            " REFERENCES tags(id) ON DELETE SET NULL"
+        )
+        cur.execute(
+            "CREATE INDEX IF NOT EXISTS idx_transactions_tag"
+            " ON transactions(tag_id)"
         )
         conn.commit()
 

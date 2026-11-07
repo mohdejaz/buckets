@@ -35,6 +35,13 @@ const showBalanceHint = (id, balance, projected = null) => {
   el.innerHTML = html;
 };
 const today = () => new Date().toISOString().slice(0, 10);
+// What a tag filter's rows add up to — the figure a tag exists to produce
+// ("what did the holiday cost?"). It is a total of the listed transactions and
+// not a balance, so it is shown beside the filter rather than in the Balance
+// column, and "net" names it for what it is: inflows and outflows together.
+const filterTotal = (count, sum) =>
+  `${count} transaction${count === 1 ? '' : 's'} · net `
+  + `<span class="font-monospace ${amtClass(sum)}">${fmt(sum, true)}</span>`;
 
 async function api(method, url, body) {
   const opts = { method, headers: { 'Content-Type': 'application/json' } };
@@ -195,6 +202,7 @@ const State = {
   buckets: [],
   archivedBuckets: [],
   bucketGroups: [],
+  tags: [],
   lastTxDate: null,
   currentBucketId: null,
   settlementBucketId: null,
@@ -387,6 +395,7 @@ const Buckets = {
       State.buckets = [];
       State.archivedBuckets = [];
       State.bucketGroups = [];
+      State.tags = [];
       this.render();
       this.renderArchived();
       return;
@@ -398,6 +407,9 @@ const Buckets = {
       const [all, groups] = await Promise.all([
         api('GET', `/api/buckets?acct_id=${State.accountId}&include_archived=1`),
         api('GET', `/api/bucket-groups?acct_id=${State.accountId}`),
+        // The transaction modal can be opened from this page (a Settlement
+        // deposit), so its tag dropdown is loaded with the rest of the page.
+        Tags.load(),
       ]);
       State.bucketGroups = groups;
       State.buckets = all.filter(b => !b.archived);
@@ -1140,6 +1152,35 @@ const Buckets = {
 };
 
 // ============================================================
+// TAGS
+// ============================================================
+// One tag per transaction, so a tag is a dropdown and not a set of chips, and
+// filtering by one is a single equality test. Tags belong to the user rather
+// than an account — the same "Holiday" marks transactions wherever they were
+// spent from — while the filter offers only the ones used in the account on
+// screen, so it never lists a choice that would come back empty.
+//
+// A tag never touches money. It decides which rows a filtered view lists, and
+// every balance, total and budget beside them goes on counting the whole
+// ledger.
+const Tags = {
+  async load() {
+    if (!State.accountId) {
+      State.tags = [];
+    } else {
+      try {
+        State.tags = await api('GET', `/api/tags?acct_id=${State.accountId}`);
+      } catch (e) { State.tags = []; }
+    }
+    // Rebuilt from the fresh list, so a tag invented in the transaction modal
+    // appears in the filter — and one pruned off its last transaction leaves
+    // it — without a second trip.
+    Transactions.syncTagFilter();
+    return State.tags;
+  },
+};
+
+// ============================================================
 // TRANSACTIONS
 // ============================================================
 const Transactions = {
@@ -1189,6 +1230,147 @@ const Transactions = {
       this._showBucketBalance();
     });
     $('txAmount').addEventListener('input', () => this._showBucketBalance());
+    $('txTagFilter').addEventListener('change', e => this.setTagFilter(e.target.value));
+    $('btnRenameTag').addEventListener('click', () => this.openRenameTag());
+    $('btnRenameTagSave').addEventListener('click', () => this.saveRenameTag());
+    $('btnRenameTagCancel').addEventListener('click', () => this.cancelRenameTag());
+    // The rename field sits outside the modal's form, so Enter has no submit
+    // to fall back on and has to be wired up.
+    $('txRenameTag').addEventListener('keydown', e => {
+      if (e.key === 'Enter') { e.preventDefault(); this.saveRenameTag(); }
+      if (e.key === 'Escape') this.cancelRenameTag();
+    });
+  },
+
+  // '' = every transaction, 'none' = only untagged ones, an id = that tag.
+  _tag: '',
+
+  // The tag a transaction being edited already had, so cancelling out of
+  // "+ New tag…" goes back to it rather than to None.
+  _editTagId: null,
+
+  syncTagFilter() {
+    const sel = $('txTagFilter');
+    const bar = $('txFilterBar');
+    if (!sel || !bar) return;
+    bar.classList.toggle('d-none', !State.accountId);
+
+    // Only tags that mark something in this account. One already selected
+    // stays listed even once its last transaction here is gone, or the
+    // dropdown would stop agreeing with the table under it.
+    const used = State.tags.filter(t => t.acct_count > 0);
+    const selected = (this._tag && this._tag !== 'none')
+      ? State.tags.find(t => String(t.id) === this._tag) : null;
+    const list = (selected && !used.includes(selected))
+      ? [...used, selected].sort((a, b) => a.name.localeCompare(b.name))
+      : used;
+    sel.innerHTML = '<option value="">All tags</option>'
+      + '<option value="none">— Untagged —</option>'
+      + list.map(t =>
+          `<option value="${t.id}">${esc(t.name)} (${t.acct_count})</option>`).join('');
+    // A tag pruned off its last transaction no longer exists to filter on.
+    sel.value = (this._tag === 'none' || selected) ? this._tag : '';
+    this._tag = sel.value;
+
+    const renameWrap = $('txRenameTagWrap');
+    const renaming = renameWrap && !renameWrap.classList.contains('d-none');
+    const pencil = $('btnRenameTag');
+    if (pencil) pencil.classList.toggle('d-none', !selected || renaming);
+    this._renderFilterTotal();
+  },
+
+  // Both come from the server, over the whole filtered set rather than the
+  // page on screen, so paging cannot understate the total.
+  _filteredCount: 0,
+  _filteredSum: 0,
+
+  _renderFilterTotal() {
+    const note = $('txFilterNote');
+    if (!note) return;
+    note.classList.toggle('d-none', !this._tag);
+    note.innerHTML = this._tag
+      ? filterTotal(this._filteredCount, this._filteredSum) : '';
+  },
+
+  setTagFilter(value) {
+    const next = String(value ?? '');
+    if (next === this._tag) return;
+    this._tag = next;
+    // A narrower list starts again at the top: "Showing n of m" is about the
+    // filtered set, so carrying a target of 200 rows over from the full
+    // ledger would claim more than was asked for.
+    this._target = this._PAGE;
+    sessionStorage.setItem('txShown', this._target);
+    this.cancelRenameTag();
+    this.load();
+  },
+
+  // Renaming is offered where the tag is already named: beside the filter that
+  // has one selected. It retitles every transaction carrying it, which is why
+  // a tag is a row of its own rather than a word repeated on each transaction.
+  openRenameTag() {
+    const tag = State.tags.find(t => String(t.id) === this._tag);
+    if (!tag) return;
+    $('txRenameTag').value = tag.name;
+    $('txRenameTagWrap').classList.remove('d-none');
+    $('btnRenameTag').classList.add('d-none');
+    $('txTagFilter').disabled = true;
+    $('txRenameTag').focus();
+  },
+
+  cancelRenameTag() {
+    const wrap = $('txRenameTagWrap');
+    if (!wrap) return;
+    wrap.classList.add('d-none');
+    $('txTagFilter').disabled = false;
+    this.syncTagFilter();
+  },
+
+  async saveRenameTag() {
+    const name = $('txRenameTag').value.trim();
+    if (!name) { showError('A tag needs a name.'); return; }
+    try {
+      await api('PUT', `/api/tags/${this._tag}`, { name });
+      toast('Tag renamed');
+      this.cancelRenameTag();
+      await Tags.load();
+      await this.load();
+      if (State.currentSection === 'bucket-detail') {
+        await BucketDetail.load(State.currentBucketId);
+      }
+    } catch (e) { showError(e.message); }
+  },
+
+  // "+ New tag…" swaps the dropdown for a name field — the same move the
+  // bucket modal makes for a new group.
+  _fillTagSelect(current) {
+    const sel = $('txTag');
+    if (!sel) return;
+    sel.innerHTML = '<option value="">— None —</option>'
+      + State.tags.map(t =>
+          `<option value="${t.id}">${esc(t.name)}</option>`).join('')
+      + '<option value="__new">+ New tag…</option>';
+    sel.value = current || '';
+    this._syncNewTag();
+  },
+
+  _syncNewTag() {
+    const sel = $('txTag');
+    const wrap = $('txNewTagWrap');
+    if (!sel || !wrap) return;
+    const creating = sel.value === '__new';
+    wrap.classList.toggle('d-none', !creating);
+    sel.classList.toggle('d-none', creating);
+    if (creating) {
+      $('txNewTag').value = '';
+      $('txNewTag').focus();
+    }
+  },
+
+  cancelNewTag() {
+    const sel = $('txTag');
+    if (sel) sel.value = this._editTagId || '';
+    this._syncNewTag();
   },
 
   _PAGE: 20,
@@ -1202,20 +1384,33 @@ const Transactions = {
       card.classList.add('d-none');
       this._pending = 0;
       $('btnPostAllTx').classList.add('d-none');
+      this.syncTagFilter();
       return;
     }
     noAcct.classList.add('d-none');
     card.classList.remove('d-none');
+    this.syncTagFilter();
 
     const params = new URLSearchParams({
       acct_id: State.accountId,
       page: 1,
       per_page: this._target,
     });
+    if (this._tag) params.set('tag', this._tag);
     try {
       const data = await api('GET', `/api/transactions?${params}`);
       this.render(data);
-    } catch (e) { showError(e.message); }
+    } catch (e) {
+      // A filter can only be rejected for naming a tag that has since been
+      // pruned off its last transaction. Dropping it shows the full ledger,
+      // which is what the user is after, rather than an error over a label.
+      if (this._tag && /tag/i.test(e.message)) {
+        this._tag = '';
+        this.syncTagFilter();
+        return this.load();
+      }
+      showError(e.message);
+    }
   },
 
   render(data) {
@@ -1223,8 +1418,12 @@ const Transactions = {
     const rows = data.transactions || [];
 
     if (!rows.length) {
-      body.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-4">
-        <i class="bi bi-receipt fs-2 d-block mb-2 opacity-25"></i>No transactions found.</td></tr>`;
+      const empty = this._tag
+        ? (this._tag === 'none' ? 'Every transaction here is tagged.'
+                                : 'No transactions with that tag.')
+        : 'No transactions found.';
+      body.innerHTML = `<tr><td colspan="8" class="text-center text-muted py-4">
+        <i class="bi bi-receipt fs-2 d-block mb-2 opacity-25"></i>${empty}</td></tr>`;
     } else {
       const html = rows.map((t, i) => {
         const posted = t.posted
@@ -1250,6 +1449,7 @@ const Transactions = {
             <span class="badge bg-light text-secondary border" style="font-size:.75rem">${esc(t.bucket)}</span>${t.linked_tx_id ? ' <span class="badge bg-secondary" style="font-size:.7rem">Transfer</span>' : ''}
           </td>
           <td class="text-muted small text-truncate" style="max-width:240px" title="${esc(t.note)}">${esc(t.note)}</td>
+          <td class="d-none d-md-table-cell">${this._tagCell(t)}</td>
           <td class="text-end font-monospace ${amtClass(t.amount)}">${fmt(t.amount, true)}</td>
           <td class="text-end font-monospace ${balClass(t.balance)}">${fmt(t.balance)}</td>
           <td class="text-center">${posted}</td>
@@ -1275,6 +1475,10 @@ const Transactions = {
 
     // The count comes from the server, not the loaded rows — paging means the
     // page may be showing 20 of 200, and "Post All" posts all 200.
+    this._filteredCount = data.total || 0;
+    this._filteredSum = data.filtered_sum || 0;
+    this._renderFilterTotal();
+
     this._pending = data.pending || 0;
     const postAllBtn = $('btnPostAllTx');
     if (this._pending) {
@@ -1283,6 +1487,18 @@ const Transactions = {
     } else {
       postAllBtn.classList.add('d-none');
     }
+  },
+
+  // The chip is the filter control as well as the label: clicking a tag in
+  // the Tag column filters to it, so finding the rest of a tag's spending
+  // needs nothing in the Actions column.
+  _tagCell(t) {
+    if (!t.tag_id) return '<span class="text-muted">—</span>';
+    const active = String(t.tag_id) === this._tag;
+    return `<button type="button" class="tag-chip${active ? ' active' : ''}"
+      onclick="Transactions.setTagFilter('${active ? '' : t.tag_id}')"
+      title="${active ? 'Clear this filter' : `Show only ${esc(t.tag)}`}"
+      >${esc(t.tag)}</button>`;
   },
 
   _pending: 0,
@@ -1328,6 +1544,8 @@ const Transactions = {
     } else {
       $('txBucket').disabled = false;
     }
+    this._editTagId = null;
+    this._fillTagSelect(null);
     this._editAmount = 0;
     this._applyAmountConstraint(bucketId ? parseInt(bucketId) : null);
     this._showBucketBalance();
@@ -1351,6 +1569,8 @@ const Transactions = {
         Buckets.populateBucketSelects();
         $('txBucket').value = t.bucket_id;
         $('txBucket').disabled = false;
+        this._editTagId = t.tag_id || null;
+        this._fillTagSelect(t.tag_id);
         this._editAmount = t.amount;
         this._applyAmountConstraint(t.bucket_id, !!t.linked_tx_id);
         this._showBucketBalance();
@@ -1370,6 +1590,13 @@ const Transactions = {
       amount: parseFloat($('txAmount').value),
       note: $('txNote').value.trim(),
     };
+    // Either an existing tag, a new one named inline, or none. An empty name
+    // under "+ New tag…" means the user changed their mind: no tag.
+    const tagSel = $('txTag');
+    const newTag = tagSel.value === '__new' ? $('txNewTag').value.trim() : '';
+    if (newTag) payload.new_tag = newTag;
+    else payload.tag_id = tagSel.value && tagSel.value !== '__new'
+      ? parseInt(tagSel.value) : null;
     try {
       if (id) {
         await api('PUT', `/api/transactions/${id}`, payload);
@@ -1380,6 +1607,10 @@ const Transactions = {
         toast('Transaction added');
       }
       this.modal.hide();
+      // Tags first: this save may have invented one, or let go of the last
+      // transaction holding another, and the filter has to agree with the
+      // list before the list is fetched against it.
+      await Tags.load();
       await this.load();
       if (State.currentSection === 'buckets' || State.currentSection === 'transactions') await Buckets.load();
       if (State.currentSection === 'bucket-detail') await BucketDetail.load(State.currentBucketId);
@@ -1432,7 +1663,10 @@ const Transactions = {
 
   exportCsv() {
     if (!State.accountId) { showError('Please select an account first.'); return; }
-    window.location.href = `/api/transactions/export?acct_id=${State.accountId}`;
+    // The export is of what the page is showing, filter included.
+    const params = new URLSearchParams({ acct_id: State.accountId });
+    if (this._tag) params.set('tag', this._tag);
+    window.location.href = `/api/transactions/export?${params}`;
   },
 };
 
@@ -1443,16 +1677,26 @@ const BucketDetail = {
   _allRows: [],
   _shown: 0,
   _PAGE: 20,
+  // '' = every transaction, 'none' = only untagged ones, an id = that tag.
+  // The whole ledger is already loaded, so this filter is applied here rather
+  // than asked of the server — and the stats above the table keep reading the
+  // unfiltered rows, because they are the bucket's money, not a view of it.
+  _tag: '',
   init() {
     $('btnBucketDetailNewTx').addEventListener('click', () => Transactions.openNew(State.currentBucketId));
     $('btnBucketDetailDeposit').addEventListener('click', () => Transactions.openNew(State.currentBucketId, 'deposit'));
     $('btnBucketDetailTransfer').addEventListener('click', () => {
       Buckets.openTransfer(State.currentBucketId, null);
     });
+    $('bdTagFilter').addEventListener('change', e => this.setTagFilter(e.target.value));
+    $('btnBucketDetailExport').addEventListener('click', () => this.exportCsv());
     UpcomingExpenses.init();
   },
 
   open(bucketId) {
+    // A filter belongs to the ledger it was set on, so opening a different
+    // bucket starts from the whole of that bucket's history.
+    if (bucketId !== State.currentBucketId) this._tag = '';
     State.currentBucketId = bucketId;
     App.nav('bucket-detail');
   },
@@ -1463,6 +1707,9 @@ const BucketDetail = {
       const [data] = await Promise.all([
         api('GET', `/api/buckets/${bucketId}/transactions`),
         UpcomingExpenses.load(bucketId),
+        // The transaction modal opens from this page, so its tag dropdown is
+        // loaded with it.
+        Tags.load(),
       ]);
       this.render(data);
     } catch (e) { showError(e.message); }
@@ -1542,12 +1789,74 @@ const BucketDetail = {
       </div>`;
 
     this._allRows = [...data.transactions].reverse();
-    this._shown = 0;
-    $('bucketDetailBody').innerHTML = '';
+    this.syncTagFilter();
+    this._renderRows();
+  },
 
-    if (!this._allRows.length) {
-      $('bucketDetailBody').innerHTML = `<tr><td colspan="6" class="text-center text-muted py-4">
-        <i class="bi bi-receipt fs-2 d-block mb-2 opacity-25"></i>No transactions yet.</td></tr>`;
+  syncTagFilter() {
+    const sel = $('bdTagFilter');
+    const bar = $('bdFilterBar');
+    if (!sel || !bar) return;
+
+    // Only the tags actually on this bucket's transactions, counted from the
+    // rows already in hand. A bucket with nothing tagged gets no control at
+    // all rather than a dropdown that can only filter to nothing.
+    const counts = new Map();
+    this._allRows.forEach(t => {
+      if (!t.tag_id) return;
+      const entry = counts.get(t.tag_id) || { name: t.tag, n: 0 };
+      entry.n += 1;
+      counts.set(t.tag_id, entry);
+    });
+    const list = [...counts.entries()]
+      .sort((a, b) => a[1].name.localeCompare(b[1].name));
+
+    bar.classList.toggle('d-none', !list.length);
+    if (!list.length) this._tag = '';
+    sel.innerHTML = '<option value="">All tags</option>'
+      + '<option value="none">— Untagged —</option>'
+      + list.map(([id, e]) =>
+          `<option value="${id}">${esc(e.name)} (${e.n})</option>`).join('');
+    sel.value = (this._tag === 'none' || counts.has(parseInt(this._tag)))
+      ? this._tag : '';
+    this._tag = sel.value;
+
+    const note = $('bdFilterNote');
+    if (note) {
+      note.classList.toggle('d-none', !this._tag);
+      // The whole ledger is in hand, so the total is of every filtered row,
+      // not only the ones paged onto the screen so far.
+      const rows = this._filtered();
+      note.innerHTML = this._tag
+        ? filterTotal(rows.length,
+                      rows.reduce((sum, t) => sum + t.amount, 0)) : '';
+    }
+  },
+
+  setTagFilter(value) {
+    this._tag = String(value ?? '');
+    this.syncTagFilter();
+    this._renderRows();
+  },
+
+  _filtered() {
+    if (!this._tag) return this._allRows;
+    if (this._tag === 'none') return this._allRows.filter(t => !t.tag_id);
+    return this._allRows.filter(t => String(t.tag_id) === this._tag);
+  },
+
+  _renderRows() {
+    const body = $('bucketDetailBody');
+    this._shown = 0;
+    body.innerHTML = '';
+
+    if (!this._filtered().length) {
+      const empty = this._tag
+        ? (this._tag === 'none' ? 'Every transaction here is tagged.'
+                                : 'No transactions with that tag.')
+        : 'No transactions yet.';
+      body.innerHTML = `<tr><td colspan="7" class="text-center text-muted py-4">
+        <i class="bi bi-receipt fs-2 d-block mb-2 opacity-25"></i>${empty}</td></tr>`;
       $('bucketDetailMoreWrap').classList.add('d-none');
       $('bucketDetailInfo').textContent = '';
       return;
@@ -1558,7 +1867,8 @@ const BucketDetail = {
 
   _appendRows() {
     const body = $('bucketDetailBody');
-    const next = this._allRows.slice(this._shown, this._shown + this._PAGE);
+    const rows = this._filtered();
+    const next = rows.slice(this._shown, this._shown + this._PAGE);
     this._shown += next.length;
 
     body.insertAdjacentHTML('beforeend', next.map(t => {
@@ -1572,6 +1882,7 @@ const BucketDetail = {
       <tr class="${t.posted ? '' : 'table-row-pending'}">
         <td class="text-muted font-monospace" style="font-size:.82rem">${t.tx_date}</td>
         <td class="text-muted" style="max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(t.note)}${t.linked_tx_id ? ' <span class="badge bg-secondary" style="font-size:.7rem">Transfer</span>' : ''}</td>
+        <td class="d-none d-md-table-cell">${this._tagCell(t)}</td>
         <td class="text-end font-monospace ${amtClass(t.amount)}">${fmt(t.amount, true)}</td>
         <td class="text-end font-monospace ${balClass(t.running)}">${fmt(t.running)}</td>
         <td class="text-center">${posted}</td>
@@ -1583,7 +1894,7 @@ const BucketDetail = {
       </tr>`;
     }).join(''));
 
-    const total = this._allRows.length;
+    const total = rows.length;
     $('bucketDetailInfo').textContent = `Showing ${this._shown} of ${total}`;
     const moreWrap = $('bucketDetailMoreWrap');
     if (this._shown < total) {
@@ -1591,6 +1902,28 @@ const BucketDetail = {
     } else {
       moreWrap.classList.add('d-none');
     }
+  },
+
+  // Downloads this bucket's ledger as it stands on screen, tag filter and
+  // all — the same deal as the account ledger's own export button.
+  exportCsv() {
+    if (!State.currentBucketId) return;
+    const params = new URLSearchParams();
+    if (this._tag) params.set('tag', this._tag);
+    const query = params.toString();
+    window.location.href =
+      `/api/buckets/${State.currentBucketId}/transactions/export${query ? '?' + query : ''}`;
+  },
+
+  // Clicking a chip filters this bucket's ledger to that tag, the same gesture
+  // the account-wide ledger answers to.
+  _tagCell(t) {
+    if (!t.tag_id) return '<span class="text-muted">—</span>';
+    const active = String(t.tag_id) === this._tag;
+    return `<button type="button" class="tag-chip${active ? ' active' : ''}"
+      onclick="BucketDetail.setTagFilter('${active ? '' : t.tag_id}')"
+      title="${active ? 'Clear this filter' : `Show only ${esc(t.tag)}`}"
+      >${esc(t.tag)}</button>`;
   },
 
   showMore() {
