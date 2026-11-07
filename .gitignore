@@ -64,6 +64,10 @@ db.sqlite3-journal
 # Buckets app database (contains personal financial data — never commit)
 buckets.db
 buckets.db-journal
+# WAL mode keeps the recent commits in these sidecars, so they hold the same
+# personal data the database does.
+buckets.db-wal
+buckets.db-shm
 out
 
 # Flask stuff:
