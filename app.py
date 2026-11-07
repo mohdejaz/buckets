@@ -455,25 +455,6 @@ def _prune_orphan_tags(conn):
     )
 
 
-def _tag_filter(conn, value):
-    """Turn the `tag` query parameter into a SQL fragment and its params.
-
-    Missing or empty lists every transaction; 'none' lists only untagged ones;
-    an id lists that tag's. Returns (sql, params, error)."""
-    value = (value or '').strip()
-    if not value:
-        return '', [], None
-    if value == 'none':
-        return ' AND t.tag_id IS NULL', [], None
-    try:
-        tag_id = int(value)
-    except ValueError:
-        return '', [], 'Tag not found'
-    if not _own_tag(conn, tag_id):
-        return '', [], 'Tag not found'
-    return ' AND t.tag_id = ?', [tag_id], None
-
-
 # ---------------------------------------------------------------------------
 # CSV export helpers
 # ---------------------------------------------------------------------------
@@ -885,61 +866,16 @@ def delete_bucket_group(group_id):
 def get_tags():
     """Every tag the signed-in user has, for the transaction modal's dropdown.
 
-    `acct_count` is how many of a tag's transactions sit in `acct_id`, so the
-    transactions page can offer only the tags that actually appear in the
-    account on screen while the modal still offers them all."""
-    acct_id = request.args.get('acct_id', type=int)
+    Tags are the user's, not an account's, so the same one can be applied to a
+    transaction in any account without being re-typed."""
     try:
         with db_conn() as conn:
-            if acct_id and not _own_account(conn, acct_id):
-                acct_id = None
             rows = conn.execute(
-                """SELECT tg.id, tg.name,
-                          (SELECT COUNT(*) FROM transactions t
-                            WHERE t.tag_id = tg.id AND t.deleted=0) AS tx_count,
-                          (SELECT COUNT(*) FROM transactions t
-                            JOIN buckets b ON b.id = t.bucket_id
-                            WHERE t.tag_id = tg.id AND t.deleted=0
-                              AND b.acct_id = ?) AS acct_count
-                   FROM tags tg WHERE tg.user_id=?
-                   ORDER BY tg.name COLLATE NOCASE""",
-                (acct_id or 0, current_user_id()),
+                "SELECT id, name FROM tags WHERE user_id=?"
+                " ORDER BY name COLLATE NOCASE",
+                (current_user_id(),),
             ).fetchall()
-        return jsonify([
-            {'id': r['id'], 'name': r['name'],
-             'tx_count': r['tx_count'], 'acct_count': r['acct_count']}
-            for r in rows
-        ])
-    except Exception as e:
-        return jsonify({'error': str(e)}), 500
-
-
-@app.route('/api/tags/<int:tag_id>', methods=['PUT'])
-@login_required
-def rename_tag(tag_id):
-    """A tag's name is the only thing it has, so this is its only edit. It
-    retitles every transaction already carrying it, which is the point: a
-    typo fixed in one place rather than re-tagging a year of rows."""
-    data = request.json or {}
-    name = (data.get('name') or '').strip()
-    if not name:
-        return jsonify({'error': 'Name is required'}), 400
-    if len(name) > 50:
-        return jsonify({'error': 'A tag name is limited to 50 characters'}), 400
-    try:
-        with db_conn() as conn:
-            if not _own_tag(conn, tag_id):
-                return jsonify({'error': 'Tag not found'}), 404
-            clash = conn.execute(
-                """SELECT id FROM tags
-                   WHERE user_id=? AND name=? COLLATE NOCASE AND id!=?""",
-                (current_user_id(), name, tag_id),
-            ).fetchone()
-            if clash:
-                return jsonify({'error': f'"{name}" already exists'}), 400
-            conn.execute("UPDATE tags SET name=? WHERE id=?", (name, tag_id))
-            conn.commit()
-        return jsonify({'id': tag_id, 'name': name})
+        return jsonify([{'id': r['id'], 'name': r['name']} for r in rows])
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
@@ -1600,18 +1536,10 @@ def get_transactions():
                 return jsonify({'transactions': [], 'total': 0, 'pending': 0,
                                 'page': 1, 'pages': 0})
 
-            tag_sql, tag_params, tag_err = _tag_filter(
-                conn, request.args.get('tag'))
-            if tag_err:
-                return jsonify({'error': tag_err}), 404
-
             # The balance shown against a row is the account's balance as of
-            # that transaction, so it counts every earlier one whether or not
-            # the tag filter lists it. Hence the window function: the running
-            # total is worked out over the whole ledger first and the filter
-            # then only picks which of those rows come back, so a filtered
-            # view reads the same balances as the full one. A tag is a label —
-            # filtering by it must not restate anyone's money.
+            # that transaction, which is a running total over the ledger in
+            # date order — so the window function works it out once, in the
+            # order the rows are booked, and the page is taken from that.
             ledger_sql = """
                 FROM (SELECT t.*, SUM(t.amount) OVER (
                                    ORDER BY t.tx_date, t.sort_order, t.id
@@ -1622,35 +1550,22 @@ def get_transactions():
                 JOIN buckets b ON b.id = t.bucket_id
                 """ + _QUALIFY_JOIN + """
                 LEFT JOIN tags tg ON tg.id = t.tag_id
-                WHERE 1=1
             """
-            filtered_sql = ledger_sql + tag_sql
-            params = [acct_id] + tag_params
+            params = [acct_id]
 
             total = conn.execute(
-                "SELECT COUNT(*) " + filtered_sql, params).fetchone()[0]
-            # What the rows a filter narrowed to add up to — the figure a tag
-            # exists to produce ("what did the holiday cost?"). It is a total
-            # of the listed transactions and not a balance, which is why it is
-            # reported beside the filter rather than in the Balance column.
-            # Over the whole filtered set, not the page, so paging cannot
-            # understate it.
-            filtered_sum = _fmt(conn.execute(
-                "SELECT COALESCE(SUM(t.amount),0) " + filtered_sql, params
-            ).fetchone()[0])
+                "SELECT COUNT(*) " + ledger_sql, params).fetchone()[0]
             # Drives the "Post All" button: it labels itself with this and
-            # stays hidden once the ledger is fully posted. Counted across the
-            # whole account whatever the filter, because that is what the
-            # button posts.
+            # stays hidden once the ledger is fully posted.
             pending = conn.execute(
-                "SELECT COUNT(*) " + ledger_sql + " AND t.posted=0", [acct_id]
+                "SELECT COUNT(*) " + ledger_sql + " WHERE t.posted=0", params
             ).fetchone()[0]
             offset = (page - 1) * per_page
             rows   = conn.execute(
                 f"SELECT t.id, t.tx_date, {_QUALIFIED_NAME} AS bucket, t.bucket_id,"
                 "       t.amount, t.note, t.posted, t.linked_tx_id, t.running,"
                 "       t.tag_id, tg.name AS tag "
-                + filtered_sql
+                + ledger_sql
                 + " ORDER BY t.tx_date DESC, t.sort_order DESC, t.id DESC LIMIT ? OFFSET ?",
                 params + [per_page, offset],
             ).fetchall()
@@ -1675,7 +1590,6 @@ def get_transactions():
         return jsonify({
             'transactions': transactions,
             'total': total,
-            'filtered_sum': filtered_sum,
             'pending': pending,
             'page': page,
             'pages': pages,
@@ -2070,8 +1984,10 @@ def move_transaction(tx_id):
 @app.route('/api/transactions/export')
 @login_required
 def export_transactions():
-    """One account's ledger as the Transactions page is showing it — the same
-    columns, and the same tag filter if one is on.
+    """One account's ledger, with the same columns the Transactions page shows.
+
+    The whole ledger, every time: the Tag column is there so the slicing can
+    be done in the spreadsheet, which is better at it than a dropdown here.
 
     Rows come back oldest-first, as this export always has: the Balance column
     then builds downwards the way a statement reads. Excel can re-sort it."""
@@ -2086,14 +2002,8 @@ def export_transactions():
             ).fetchone()
             if not acct:
                 return jsonify({'error': 'Account not found'}), 404
-            tag_sql, tag_params, tag_err = _tag_filter(
-                conn, request.args.get('tag'))
-            if tag_err:
-                return jsonify({'error': tag_err}), 404
-            # Same shape as the listing endpoint, and for the same reason: the
-            # balance against a row counts every earlier transaction whether
-            # or not the filter lists it, so it is totalled over the whole
-            # ledger first and only then filtered.
+            # Same shape as the listing endpoint: the balance against a row
+            # is a running total over the ledger in the order it is booked.
             rows = conn.execute(
                 f"""SELECT t.tx_date, {_QUALIFIED_NAME} AS bucket, t.note,
                            tg.name AS tag, t.amount, t.running, t.posted
@@ -2106,9 +2016,8 @@ def export_transactions():
                    JOIN buckets b ON b.id = t.bucket_id
                    {_QUALIFY_JOIN}
                    LEFT JOIN tags tg ON tg.id = t.tag_id
-                   WHERE 1=1""" + tag_sql
-                + " ORDER BY t.tx_date ASC, t.sort_order ASC, t.id ASC",
-                [acct_id] + tag_params,
+                   ORDER BY t.tx_date ASC, t.sort_order ASC, t.id ASC""",
+                (acct_id,),
             ).fetchall()
 
         return _csv_response(
@@ -2125,9 +2034,10 @@ def export_transactions():
 @app.route('/api/buckets/<int:bkt_id>/transactions/export')
 @login_required
 def export_bucket_transactions(bkt_id):
-    """One bucket's ledger as its page is showing it — the same columns, and
-    the same tag filter if one is on. The bucket's name goes in the filename
-    rather than down a column of its own, since every row shares it."""
+    """One bucket's ledger, with the same columns its page shows. The whole
+    ledger, every time, with the Tag column there to slice on in the
+    spreadsheet. The bucket's name goes in the filename rather than down a
+    column of its own, since every row shares it."""
     try:
         with db_conn() as conn:
             # Qualified by its group, so an export of "Gas" is filed under
@@ -2143,13 +2053,8 @@ def export_bucket_transactions(bkt_id):
             ).fetchone()
             if not bucket:
                 return jsonify({'error': 'Bucket not found'}), 404
-            tag_sql, tag_params, tag_err = _tag_filter(
-                conn, request.args.get('tag'))
-            if tag_err:
-                return jsonify({'error': tag_err}), 404
-            # The running balance is the bucket's own money and counts every
-            # transaction, so — as on the page — it is totalled over the whole
-            # ledger before the filter picks which rows are written out.
+            # The running balance is the bucket's own money, totalled over
+            # its whole ledger in the order the rows are booked.
             rows = conn.execute(
                 """SELECT t.tx_date, t.note, tg.name AS tag, t.amount,
                           t.running, t.posted
@@ -2159,9 +2064,8 @@ def export_bucket_transactions(bkt_id):
                            FROM transactions t
                           WHERE t.bucket_id = ? AND t.deleted=0) t
                    LEFT JOIN tags tg ON tg.id = t.tag_id
-                   WHERE 1=1""" + tag_sql
-                + " ORDER BY t.tx_date ASC, t.sort_order ASC, t.id ASC",
-                [bkt_id] + tag_params,
+                   ORDER BY t.tx_date ASC, t.sort_order ASC, t.id ASC""",
+                (bkt_id,),
             ).fetchall()
 
         return _csv_response(
