@@ -17,6 +17,7 @@ login. Hand the temporary password to the user over a private channel.
 """
 
 import argparse
+import sqlite3
 import sys
 
 from werkzeug.security import generate_password_hash
@@ -29,6 +30,44 @@ def _find_user(conn, email):
         "SELECT id, name, email, must_change_password FROM users WHERE LOWER(email)=?",
         (email.strip().lower(),),
     ).fetchone()
+
+
+# Every table that hangs off a user, in the order they have to go: each
+# foreign key below is declared with no ON DELETE action, so a child row left
+# behind makes the parent delete fail outright. Children first, user last.
+_DELETE_STEPS = [
+    ("IOU request", """
+        DELETE FROM iou_requests WHERE requester_id=:uid OR payee_id=:uid"""),
+    ("transaction", """
+        DELETE FROM transactions WHERE bucket_id IN (
+            SELECT b.id FROM buckets b
+            JOIN accounts a ON a.id = b.acct_id WHERE a.user_id=:uid)"""),
+    ("upcoming expense", """
+        DELETE FROM upcoming_expenses WHERE bucket_id IN (
+            SELECT b.id FROM buckets b
+            JOIN accounts a ON a.id = b.acct_id WHERE a.user_id=:uid)"""),
+    ("bucket", """
+        DELETE FROM buckets WHERE acct_id IN (
+            SELECT id FROM accounts WHERE user_id=:uid)"""),
+    ("bucket group", """
+        DELETE FROM bucket_groups WHERE acct_id IN (
+            SELECT id FROM accounts WHERE user_id=:uid)"""),
+    ("account", "DELETE FROM accounts WHERE user_id=:uid"),
+    ("tag", "DELETE FROM tags WHERE user_id=:uid"),
+]
+
+
+def _delete_user_data(conn, user_id):
+    """Delete everything owned by a user, leaving only the users row.
+
+    Must be called inside a transaction — the caller opens one — so a failure
+    part-way through takes the whole delete with it rather than leaving a
+    half-dismantled account. Returns {label: rows deleted} for the summary.
+    """
+    counts = {}
+    for label, sql in _DELETE_STEPS:
+        counts[label] = conn.execute(sql, {'uid': user_id}).rowcount
+    return counts
 
 
 def cmd_add(args):
@@ -113,12 +152,38 @@ def cmd_delete(args):
                 print("Aborted.")
                 return 1
 
-        conn.execute("DELETE FROM users WHERE id=?", (user['id'],))
-        conn.commit()
+        # Own the transaction mode rather than inheriting whatever get_db()
+        # happens to use, so a failed delete is always one this script can undo.
+        # On 3.12+ ask for PEP 249 semantics outright; on older Pythons, where
+        # the attribute does not exist, make sure the legacy implicit BEGIN has
+        # not been disabled with isolation_level=None. Set after the prompt, so
+        # the operator's thinking time is not spent inside an open transaction
+        # holding a WAL snapshot open.
+        if hasattr(conn, 'autocommit'):
+            conn.autocommit = False
+        else:
+            conn.isolation_level = ''
+
+        try:
+            # `with conn` is the transaction, not the connection: it commits on
+            # success and rolls back on any exception, so a user is either gone
+            # with everything they owned or still entirely there.
+            with conn:
+                counts = _delete_user_data(conn, user['id'])
+                conn.execute("DELETE FROM users WHERE id=?", (user['id'],))
+        except sqlite3.IntegrityError as exc:
+            print(f"Error: could not delete {user['name']} <{email}>: {exc}.\n"
+                  f"Nothing was deleted. This means the user still owns rows "
+                  f"that this script does not know about — a table added since "
+                  f"it was last updated.", file=sys.stderr)
+            return 1
 
     print(f"Deleted user {user['name']} <{email}>.")
-    print("Note: any accounts/buckets owned by this user are now orphaned; "
-          "remove them separately if needed.")
+    # Labels are singular in _DELETE_STEPS; every one pluralises with a plain 's'.
+    summary = ", ".join(f"{n} {label}{'' if n == 1 else 's'}"
+                        for label, n in counts.items() if n)
+    print(f"Also removed: {summary}." if summary
+          else "They had no accounts, buckets or transactions.")
     return 0
 
 
@@ -138,7 +203,8 @@ def main():
     p_reset.add_argument('email', help='Login email')
     p_reset.set_defaults(func=cmd_reset_password)
 
-    p_del = sub.add_parser('delete', help='Delete a user.')
+    p_del = sub.add_parser('delete',
+                           help='Delete a user and everything they own.')
     p_del.add_argument('email', help='Login email')
     p_del.add_argument('-y', '--yes', action='store_true',
                        help='Skip the confirmation prompt.')
