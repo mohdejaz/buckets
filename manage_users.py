@@ -60,9 +60,9 @@ _DELETE_STEPS = [
 def _delete_user_data(conn, user_id):
     """Delete everything owned by a user, leaving only the users row.
 
-    Runs inside the caller's transaction so a failure part-way through takes
-    the whole delete with it rather than leaving a half-dismantled account.
-    Returns {label: rows deleted} for the summary.
+    Must be called inside a transaction — the caller opens one — so a failure
+    part-way through takes the whole delete with it rather than leaving a
+    half-dismantled account. Returns {label: rows deleted} for the summary.
     """
     counts = {}
     for label, sql in _DELETE_STEPS:
@@ -152,12 +152,26 @@ def cmd_delete(args):
                 print("Aborted.")
                 return 1
 
+        # Own the transaction mode rather than inheriting whatever get_db()
+        # happens to use, so a failed delete is always one this script can undo.
+        # On 3.12+ ask for PEP 249 semantics outright; on older Pythons, where
+        # the attribute does not exist, make sure the legacy implicit BEGIN has
+        # not been disabled with isolation_level=None. Set after the prompt, so
+        # the operator's thinking time is not spent inside an open transaction
+        # holding a WAL snapshot open.
+        if hasattr(conn, 'autocommit'):
+            conn.autocommit = False
+        else:
+            conn.isolation_level = ''
+
         try:
-            counts = _delete_user_data(conn, user['id'])
-            conn.execute("DELETE FROM users WHERE id=?", (user['id'],))
-            conn.commit()
+            # `with conn` is the transaction, not the connection: it commits on
+            # success and rolls back on any exception, so a user is either gone
+            # with everything they owned or still entirely there.
+            with conn:
+                counts = _delete_user_data(conn, user['id'])
+                conn.execute("DELETE FROM users WHERE id=?", (user['id'],))
         except sqlite3.IntegrityError as exc:
-            conn.rollback()
             print(f"Error: could not delete {user['name']} <{email}>: {exc}.\n"
                   f"Nothing was deleted. This means the user still owns rows "
                   f"that this script does not know about — a table added since "
